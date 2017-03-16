@@ -21,7 +21,7 @@
 "bold",     // BOLD EPI scans <br>
 "sbref"     // Single-band reference file for multiband acquisitions <br>
 
-* For functional tasks, also add task name as follows: "task-<name>"
+* For functional tasks, also add task name as follows: "task-(name)" <br>
 
 <b>DTI Files:</b>
 
