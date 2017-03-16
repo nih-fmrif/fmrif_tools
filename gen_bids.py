@@ -4,7 +4,7 @@ import os
 import argparse
 import logging
 from converters import convert_to_bids
-from utils import create_path, log_output, MAX_WORKERS
+from utils import create_path, log_output, MAX_WORKERS, get_modality
 from datetime import datetime
 
 
@@ -18,7 +18,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "subject_map",
+        "dicom_dir",
+        help="Path to bids directory for output"
+    )
+
+    parser.add_argument(
+        "--subject_map",
         help="Path to the map of DICOM files to BIDS subjects",
         default=None
     )
@@ -67,6 +72,7 @@ if __name__ == "__main__":
 
     # Print the settings
     settings_str = "Bids directory: {}\n".format(settings.bids_dir) + \
+                   "DICOM directory: {}\n".format(settings.dicom_dir) + \
                    "Subject map: {}\n".format(settings.subject_map) + \
                    "Overwrite: {}\n".format(settings.overwrite) + \
                    "Log directory: {}\n".format(settings.log_dir) + \
@@ -78,8 +84,9 @@ if __name__ == "__main__":
                "Log located in {}.".format(log_fpath), logger=logging)
 
     # Use the subject map to convert the DICOM series into BIDS-structured Nifti files
-    convert_to_bids(bids_dir=settings.bids_dir, subject_map=settings.subject_map, conversion_tool='dcm2niix',
-                    logger=logging, nthreads=settings.nthreads, overwrite=settings.overwrite)
+    convert_to_bids(bids_dir=settings.bids_dir, dicom_dir=settings.dicom_dir, subject_map=settings.subject_map,
+                    conversion_tool='dcm2niix', logger=logging, nthreads=settings.nthreads,
+                    overwrite=settings.overwrite)
 
     log_output("BIDS conversion complete. Results stored in {} directory".format(settings.bids_dir), logger=logging)
 

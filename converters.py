@@ -1,11 +1,13 @@
 import os
 import shutil
+import dicom
 import json
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
-from utils import log_output, create_path, extract_tgz, MAX_WORKERS
+from utils import log_output, create_path, extract_tgz, MAX_WORKERS, get_modality
 from threading import Semaphore
+from collections import OrderedDict
 
 
 LOG_MESSAGES = {
@@ -196,7 +198,7 @@ def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger
                                      "'dimon'".format(conversion_tool))
 
 
-def convert_to_bids(bids_dir, subject_map, conversion_tool='dcm2niix', logger=None,
+def convert_to_bids(bids_dir, dicom_dir, subject_map=None, conversion_tool='dcm2niix', logger=None,
                     nthreads=MAX_WORKERS, overwrite=False):
 
     tmp_dir = os.path.join(os.getcwd(), "tmp")
@@ -222,142 +224,235 @@ def convert_to_bids(bids_dir, subject_map, conversion_tool='dcm2niix', logger=No
     else:
         create_path(bids_dir)
 
+    # Get all the compressed file fpaths from the dir containing the dcm tgz files from oxygen/gold
+    tgz_fpaths = glob(os.path.join(dicom_dir, "*.tgz"))
+
+    # Iterate through the files, peek at the DICOM files without extracting the whole archive,
+    # decide if it is a valid BIDS file, and add to list of files to convert if it is.
+    subject_map = OrderedDict()
+
+    if not os.path.isdir(tmp_dir):
+        create_path(tmp_dir, thread_semaphore)
+
+    for tgz_file in tgz_fpaths:
+
+        session_dir = extract_tgz(tgz_file, out_path=tmp_dir, logger=logger)
+
+        tgz_fname = tgz_file.split("/")[-1][:-4].split("-")
+        subject_id = tgz_fname[1]
+        session_id = tgz_fname[2]
+
+        # Get scan dirs
+        scan_dirs = glob(os.path.join(session_dir, "mr_*"))
+
+        # Take one dcm file in the dir, check whether scan is of BIDS type, if
+        # so, add to map
+        for scan_dir in scan_dirs:
+
+            dcm_file = glob(os.path.join(scan_dir, "*.dcm"))[0]
+
+            dcm = dicom.read_file(dcm_file)
+
+            results = get_modality(dcm[0x08, 0x103e].value)
+
+            if results:
+
+                if subject_id not in subject_map.keys():
+                    subject_map[subject_id] = OrderedDict()
+
+                if session_id not in subject_map[subject_id].keys():
+                    subject_map[subject_id][session_id] = OrderedDict()
+
+                bids_type = results[0]
+                modality = results[1]
+
+                if bids_type not in subject_map[subject_id][session_id].keys():
+                    subject_map[subject_id][session_id][bids_type] = []
+
+                curr_run = len(subject_map[subject_id][session_id][bids_type])
+                nxt_run = "0{}".format(curr_run + 1)  # BUG - THIS WILL BREAK IF MORE THAN 9 RUNS
+
+                if bids_type == "anat":
+                    subject_map[subject_id][session_id][bids_type].append([scan_dir, bids_type, modality, nxt_run])
+                elif bids_type == "func":
+                    task = results[2]  # BUG IN THE COUNTING, WILL NOT COUNT CORRECTLY IF MULT TASKS
+                    subject_map[subject_id][session_id][bids_type].append([scan_dir, bids_type, modality, task, nxt_run])
+
+    exec_map = OrderedDict()
+    subject_counter = 0
+    for subject in subject_map.keys():
+        subject_counter += 1
+        bids_subject = "sub-0{}".format(subject_counter)
+
+        session_counter = 0
+        for session in subject_map[subject].keys():
+            session_counter += 1
+            bids_session = "ses-0{}".format(session_counter)
+
+            for bids_type in subject_map[subject][session].keys():
+
+                if bids_type == "anat":
+
+                    for run in subject_map[subject][session][bids_type]:
+
+                        modality = run[2]
+                        curr_run = run[3]
+                        bids_name = "{}_{}_run-{}_{}".format(bids_subject, bids_session, curr_run, modality)
+                        scan_bdir = os.path.join(bids_dir, bids_subject, bids_session, bids_type)
+                        scan_fpath = run[0]
+                        exec_map[bids_name] = (scan_bdir, scan_fpath)
+
+                elif bids_type == "func":
+
+                    for run in subject_map[subject][session][bids_type]:
+                        modality = run[2]
+                        curr_run = run[4]
+                        task = run[3]
+                        bids_name = "{}_{}_task-{}_run-{}_{}".format(bids_subject, bids_session, task, curr_run, modality)
+                        scan_bdir = os.path.join(bids_dir, bids_subject, bids_session, bids_type)
+                        scan_fpath = run[0]
+                        exec_map[bids_name] = (scan_bdir, scan_fpath)
+
+    #######################################################
+    # DO THIS IF SUBJECT MAP IS PRESENT - NOT WORKING ATM #
+    #######################################################
+
     # Iterate through the subject map and generate the bids names and filepaths for each DICOM series to be converted
-    with open(subject_map, "r") as sm:
-        subject_map = json.loads(sm.read())
-
-    exec_map = {}
-
-    for subject in subject_map.keys():  # Iterates through the subjects
-
-        subject_name = subject[4:]
-
-        for session in subject_map[subject].keys():  # Iterates through the sessions
-
-            session_name = session[4:]
-
-            session_fpath = subject_map[subject][session]['session_fpath']
-
-            if session_fpath[-4:] == ".tgz":
-                # Verify file exists
-
-                if not os.path.isdir(tmp_dir):
-                    create_path(tmp_dir, thread_semaphore)
-
-                # Extract file into tmp dir and get session_dir
-                session_dir = extract_tgz(session_fpath, out_path=tmp_dir, logger=logger)
-
-            else:
-                # Verify dir exists
-                # Assume fpath is a session dir
-                session_dir = session_fpath
-
-            for scan_type in subject_map[subject][session]['scan_types'].keys():
-
-                if scan_type == "anat":
-
-                    for anat_scan in subject_map[subject][session]['scan_types']['anat']:
-                        # Extract the run metadata
-                        scan_dir = anat_scan['scan_dir']
-
-                        modality = anat_scan['modality']
-                        run = anat_scan['run']
-                        acq = anat_scan.get('acq_label', None)
-                        rec = anat_scan.get('rec_label', None)
-
-                        # Construct the appropriate BIDS name for the current scan
-                        acq_label = "_acq-{}".format(acq) if acq else ""
-                        rec_label = "_rec-{}".format(rec) if rec else ""
-
-                        bids_name = "sub-{}_ses-{}{}{}_run-{}_{}".format(subject_name, session_name, acq_label,
-                                                                         rec_label, run, modality)
-
-                        # Construct the fpath for the bids directory of the current image, and the fpath for the
-                        # location of the DICOM data for the current scan
-                        scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
-                                                 "anat")
-                        scan_fpath = os.path.join(session_dir, scan_dir)
-
-                        # Add this data to the list of bids files to be created
-                        exec_map[bids_name] = (scan_bdir, scan_fpath)
-
-                elif scan_type == "func":
-
-                    for func_scan in subject_map[subject][session]['scan_types']['func']:
-                        # Extract the run metadata
-                        scan_dir = func_scan['scan_dir']
-
-                        modality = func_scan['modality']
-                        task = func_scan['task']
-                        run = func_scan['run']
-                        acq = func_scan.get('acq_label', None)
-                        rec = func_scan.get('rec_label', None)
-
-                        # Construct the appropriate BIDS name for the current scan
-                        acq_label = "_acq-{}".format(acq) if acq else ""
-                        rec_label = "_rec-{}".format(rec) if rec else ""
-
-                        bids_name = "sub-{}_ses-{}_task-{}{}{}_run-{}_{}".format(subject_name, session_name, task,
-                                                                                 acq_label, rec_label, run, modality)
-
-                        # Construct the fpath for the bids directory of the current image, and the fpath for the
-                        # location of the DICOM data for the current scan
-                        scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
-                                                 "func")
-                        scan_fpath = os.path.join(session_dir, scan_dir)
-
-                        # Add this data to the list of bids files to be created
-                        exec_map[bids_name] = (scan_bdir, scan_fpath)
-
-                elif scan_type == "dwi":
-
-                    for dwi_scan in subject_map[subject][session]['scan_types']['dwi']:
-                        # Extract the run metadata
-                        scan_dir = dwi_scan['scan_dir']
-
-                        run = dwi_scan['run']
-                        acq = dwi_scan.get('acq_label', None)
-
-                        # Construct the appropriate BIDS name for the current scan
-                        acq_label = "_acq-{}".format(acq) if acq else ""
-
-                        bids_name = "sub-{}_ses-{}{}_run-{}_dwi".format(subject_name, session_name, acq_label, run)
-
-                        # Construct the fpath for the bids directory of the current image, and the fpath for the
-                        # location of the DICOM data for the current scan
-                        scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
-                                                 "dwi")
-                        scan_fpath = os.path.join(session_dir, scan_dir)
-
-                        # Add this data to the list of bids files to be created
-                        exec_map[bids_name] = (scan_bdir, scan_fpath)
-
-                elif scan_type == "fmap":
-
-                    for fmap_scan in subject_map[subject][session]['scan_types']['fmap']:
-                        # Extract the run metadata
-                        scan_dir = fmap_scan['scan_dir']
-
-                        modality = fmap_scan['modality']
-                        run = fmap_scan['run']
-                        acq = fmap_scan.get('acq_label', None)
-
-                        # Construct the appropriate BIDS name for the current scan
-                        modality = "{}_epi".format(modality) if "dir-" in modality else modality
-                        acq_label = "_acq-{}".format(acq) if acq else ""
-
-                        bids_name = "sub-{}_ses-{}{}_run-{}_{}".format(subject_name, session_name, acq_label, run,
-                                                                       modality)
-
-                        # Construct the fpath for the bids directory of the current image, and the fpath for the
-                        # location of the DICOM data for the current scan
-                        scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
-                                                 "fmap")
-                        scan_fpath = os.path.join(session_dir, scan_dir)
-
-                        # Add this data to the list of bids files to be created
-                        exec_map[bids_name] = (scan_bdir, scan_fpath)
-
+    # with open(subject_map, "r") as sm:
+    #     subject_map = json.loads(sm.read())
+    #
+    # exec_map = {}
+    #
+    # for subject in subject_map.keys():  # Iterates through the subjects
+    #
+    #     subject_name = subject[4:]
+    #
+    #     for session in subject_map[subject].keys():  # Iterates through the sessions
+    #
+    #         session_name = session[4:]
+    #
+    #         session_fpath = subject_map[subject][session]['session_fpath']
+    #
+    #         if session_fpath[-4:] == ".tgz":
+    #             # Verify file exists
+    #
+    #             if not os.path.isdir(tmp_dir):
+    #                 create_path(tmp_dir, thread_semaphore)
+    #
+    #             # Extract file into tmp dir and get session_dir
+    #             session_dir = extract_tgz(session_fpath, out_path=tmp_dir, logger=logger)
+    #
+    #         else:
+    #             # Verify dir exists
+    #             # Assume fpath is a session dir
+    #             session_dir = session_fpath
+    #
+    #         for scan_type in subject_map[subject][session]['scan_types'].keys():
+    #
+    #             if scan_type == "anat":
+    #
+    #                 for anat_scan in subject_map[subject][session]['scan_types']['anat']:
+    #                     # Extract the run metadata
+    #                     scan_dir = anat_scan['scan_dir']
+    #
+    #                     modality = anat_scan['modality']
+    #                     run = anat_scan['run']
+    #                     acq = anat_scan.get('acq_label', None)
+    #                     rec = anat_scan.get('rec_label', None)
+    #
+    #                     # Construct the appropriate BIDS name for the current scan
+    #                     acq_label = "_acq-{}".format(acq) if acq else ""
+    #                     rec_label = "_rec-{}".format(rec) if rec else ""
+    #
+    #                     bids_name = "sub-{}_ses-{}{}{}_run-{}_{}".format(subject_name, session_name, acq_label,
+    #                                                                      rec_label, run, modality)
+    #
+    #                     # Construct the fpath for the bids directory of the current image, and the fpath for the
+    #                     # location of the DICOM data for the current scan
+    #                     scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
+    #                                              "anat")
+    #                     scan_fpath = os.path.join(session_dir, scan_dir)
+    #
+    #                     # Add this data to the list of bids files to be created
+    #                     exec_map[bids_name] = (scan_bdir, scan_fpath)
+    #
+    #             elif scan_type == "func":
+    #
+    #                 for func_scan in subject_map[subject][session]['scan_types']['func']:
+    #                     # Extract the run metadata
+    #                     scan_dir = func_scan['scan_dir']
+    #
+    #                     modality = func_scan['modality']
+    #                     task = func_scan['task']
+    #                     run = func_scan['run']
+    #                     acq = func_scan.get('acq_label', None)
+    #                     rec = func_scan.get('rec_label', None)
+    #
+    #                     # Construct the appropriate BIDS name for the current scan
+    #                     acq_label = "_acq-{}".format(acq) if acq else ""
+    #                     rec_label = "_rec-{}".format(rec) if rec else ""
+    #
+    #                     bids_name = "sub-{}_ses-{}_task-{}{}{}_run-{}_{}".format(subject_name, session_name, task,
+    #                                                                              acq_label, rec_label, run, modality)
+    #
+    #                     # Construct the fpath for the bids directory of the current image, and the fpath for the
+    #                     # location of the DICOM data for the current scan
+    #                     scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
+    #                                              "func")
+    #                     scan_fpath = os.path.join(session_dir, scan_dir)
+    #
+    #                     # Add this data to the list of bids files to be created
+    #                     exec_map[bids_name] = (scan_bdir, scan_fpath)
+    #
+    #             elif scan_type == "dwi":
+    #
+    #                 for dwi_scan in subject_map[subject][session]['scan_types']['dwi']:
+    #                     # Extract the run metadata
+    #                     scan_dir = dwi_scan['scan_dir']
+    #
+    #                     run = dwi_scan['run']
+    #                     acq = dwi_scan.get('acq_label', None)
+    #
+    #                     # Construct the appropriate BIDS name for the current scan
+    #                     acq_label = "_acq-{}".format(acq) if acq else ""
+    #
+    #                     bids_name = "sub-{}_ses-{}{}_run-{}_dwi".format(subject_name, session_name, acq_label, run)
+    #
+    #                     # Construct the fpath for the bids directory of the current image, and the fpath for the
+    #                     # location of the DICOM data for the current scan
+    #                     scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
+    #                                              "dwi")
+    #                     scan_fpath = os.path.join(session_dir, scan_dir)
+    #
+    #                     # Add this data to the list of bids files to be created
+    #                     exec_map[bids_name] = (scan_bdir, scan_fpath)
+    #
+    #             elif scan_type == "fmap":
+    #
+    #                 for fmap_scan in subject_map[subject][session]['scan_types']['fmap']:
+    #                     # Extract the run metadata
+    #                     scan_dir = fmap_scan['scan_dir']
+    #
+    #                     modality = fmap_scan['modality']
+    #                     run = fmap_scan['run']
+    #                     acq = fmap_scan.get('acq_label', None)
+    #
+    #                     # Construct the appropriate BIDS name for the current scan
+    #                     modality = "{}_epi".format(modality) if "dir-" in modality else modality
+    #                     acq_label = "_acq-{}".format(acq) if acq else ""
+    #
+    #                     bids_name = "sub-{}_ses-{}{}_run-{}_{}".format(subject_name, session_name, acq_label, run,
+    #                                                                    modality)
+    #
+    #                     # Construct the fpath for the bids directory of the current image, and the fpath for the
+    #                     # location of the DICOM data for the current scan
+    #                     scan_bdir = os.path.join(bids_dir, "sub-{}".format(subject_name), "ses-{}".format(session_name),
+    #                                              "fmap")
+    #                     scan_fpath = os.path.join(session_dir, scan_dir)
+    #
+    #                     # Add this data to the list of bids files to be created
+    #                     exec_map[bids_name] = (scan_bdir, scan_fpath)
+    #
     # Iterate through executable list and convert to Nifti
 
     if nthreads > 0:    # Run in multiple threads
@@ -398,6 +493,28 @@ def convert_to_bids(bids_dir, subject_map, conversion_tool='dcm2niix', logger=No
 
             if not success:
                 log_output("Could not convert DICOM series in {}".format(dcm_dir))
+
+    # Print map to csv
+    with open(os.path.join(dicom_dir, "bids_map.csv"), "w") as f:
+
+        f.write("bids_subject,bids_session,modality,task,run,dicom_folder\n")
+
+        for bids_fname, fpaths in exec_map.items():
+
+            dcm_fpath = fpaths[1]
+
+            bids_subject = bids_fname.split("_")[0]
+            bids_session = bids_fname.split("_")[1]
+            modality = bids_fname.split("_")[-1]
+            dicom_folder = dcm_fpath
+            run = bids_fname.split("_")[-2]
+            if modality == "bold" or modality == "sbref":
+                task = bids_fname.split("_")[-3]
+            else:
+                task = ""
+            out_str = "{},{},{},{},{},{}\n".format(bids_subject, bids_session, modality, task, run, dicom_folder)
+            f.write(out_str)
+
 
     # Remove tmp dir if it was created
     if os.path.isdir(tmp_dir):
