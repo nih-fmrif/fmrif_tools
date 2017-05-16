@@ -1,13 +1,15 @@
+from __future__ import print_function, unicode_literals
+
 import os
 import shutil
 import dicom
-import json
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
 from utils import log_output, create_path, extract_tgz, MAX_WORKERS, get_modality
 from threading import Semaphore
 from collections import OrderedDict
+from datetime import datetime
 
 
 LOG_MESSAGES = {
@@ -27,6 +29,8 @@ LOG_MESSAGES = {
         'Return Code:\n{}\n\n',
 }
 
+date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
 
 class NiftyConversionFailure(Exception):
     def __init__(self, message):
@@ -38,7 +42,7 @@ class DuplicateFile(Exception):
         self.message = message
 
 
-def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger=None, bids_meta=False, semaphore=None):
+def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger=None, semaphore=None):
 
     # Create the bids output directory if it does not exist
     if not os.path.isdir(out_dir):
@@ -199,7 +203,7 @@ def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger
 
 
 def convert_to_bids(bids_dir, dicom_dir, subject_map=None, conversion_tool='dcm2niix', logger=None,
-                    nthreads=MAX_WORKERS, overwrite=False):
+                    nthreads=MAX_WORKERS, overwrite=False, gen_map=False):
 
     tmp_dir = os.path.join(os.getcwd(), "tmp")
 
