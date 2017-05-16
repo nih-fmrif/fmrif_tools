@@ -299,7 +299,7 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 'patient_id': [curr_dcm.PatientID],
                 'scan_datetime': ["{}_{}".format(curr_dcm.StudyDate, curr_dcm.StudyTime)],
                 'oxy_file': ["{}-DICOM.tgz".format("-".join(dcm_file.split("/")[:2]))],
-                'scan_dir': [dcm_file],
+                'scan_dir': [os.path.dirname(dcm_file)],
                 'resp_physio': [resp_physio],
                 'cardio_physio': [cardio_physio]
             })

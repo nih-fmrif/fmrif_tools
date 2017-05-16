@@ -6,7 +6,7 @@ import dicom
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
-from utils import log_output, create_path, extract_tgz, MAX_WORKERS, get_modality
+from utils import create_path, extract_tgz, MAX_WORKERS
 from threading import Semaphore
 from collections import OrderedDict
 from datetime import datetime
@@ -42,40 +42,48 @@ class DuplicateFile(Exception):
         self.message = message
 
 
-def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger=None, semaphore=None):
+class BIDSConverter(object):
 
-    # Create the bids output directory if it does not exist
-    if not os.path.isdir(out_dir):
-        create_path(out_dir, semaphore=semaphore)
+    def __init__(self, conversion_tool='dcm2niix', log=None):
+        self.conversion_tool = conversion_tool
+        self.log = log
 
-    if conversion_tool == 'dcm2niix':
+    def convert_to_bids(self, bids_fpath, dcm_dir):
 
-        dcm2niix_workdir = dcm_dir
+        if self.conversion_tool == 'dcm2niix':
+            self._dcm2niix(bids_fpath, dcm_dir)
+        elif self.conversion_tool == 'dimon':
+            self._dimon(bids_fpath, dcm_dir)
+        else:
+            raise NiftyConversionFailure(
+                "Tool Error: {} is not a supported conversion tool. Please select 'dcm2niix' or "
+                "'dimon'".format(self.conversion_tool))
 
-        if bids_meta:
-            cmd = [
+    def _dcm2niix(self, bids_fpath, dcm_dir):
+
+        bids_dir = os.path.dirname(bids_fpath)
+        bids_fname = os.path.basename(bids_fpath).split(".")[0]
+
+        # Create the bids output directory if it does not exist
+        if not os.path.isdir(os.path.dirname(bids_dir)):
+            create_path(os.path.dirname(bids_dir))
+
+        workdir = dcm_dir
+
+        cmd = [
                 "dcm2niix",
                 "-z",
                 "y",
                 "-b",
                 "y",
                 "-f",
-                out_fname,
-                dcm_dir
-            ]
-        else:
-            cmd = [
-                "dcm2niix",
-                "-z",
-                "y",
-                "-f",
-                out_fname,
+                bids_fname,
                 dcm_dir
             ]
 
         try:
 
-            result = check_output(cmd, stderr=STDOUT, cwd=dcm2niix_workdir, universal_newlines=True)
+            result = check_output(cmd, stderr=STDOUT, cwd=workdir, universal_newlines=True)
 
             # The following line is a hack to get the actual filename returned by the dcm2niix utility. When converting
             # the B0 dcm files, or files that specify which coil they used, or whether they contain phase information,
@@ -88,20 +96,17 @@ def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger
                  if s[0] == '/'][0].split("/")[-1]
 
             # Move nifti file and json bids file to anat folder
-            shutil.move(os.path.join(dcm_dir, "{}.nii.gz".format(actual_fname)),
-                        os.path.join(out_dir, "{}.nii.gz".format(out_fname)))
-            shutil.move(os.path.join(dcm_dir, "{}.json".format(actual_fname)),
-                        os.path.join(out_dir, "{}.json".format(out_fname)))
+            shutil.move(os.path.join(workdir, "{}.nii.gz".format(actual_fname)),
+                        os.path.join(workdir, "{}.nii.gz".format(bids_fname)))
+            shutil.move(os.path.join(workdir, "{}.json".format(actual_fname)),
+                        os.path.join(workdir, "{}.json".format(bids_fname)))
 
-            dcm_file = [f for f in os.listdir(dcm_dir) if ".dcm" in f][0]
-
-            log_str = LOG_MESSAGES['success_converted'].format(os.path.join(dcm_dir, dcm_file), out_fname,
-                                                               " ".join(cmd), 0)
+            log_str = LOG_MESSAGES['success_converted'].format(dcm_dir, bids_fpath, " ".join(cmd), 0)
 
             if result:
                 log_str += LOG_MESSAGES['output'].format(result)
 
-            log_output(log_str, logger=logger, semaphore=semaphore)
+            self.log.info(log_str)
 
             return dcm_dir, True
 
@@ -112,98 +117,107 @@ def dcm_to_nifti(dcm_dir, out_fname, out_dir, conversion_tool='dcm2niix', logger
             if e.output:
                 log_str += LOG_MESSAGES['output'].format(e.output)
 
-            log_output(log_str, level="ERROR", logger=logger, semaphore=semaphore)
+            self.log.error(log_str)
 
             return dcm_dir, False
 
         finally:
 
             # Clean up temporary files
-            tmp_files = glob(os.path.join(dcm2niix_workdir, "*.nii.gz"))
-            tmp_files.extend(glob(os.path.join(dcm2niix_workdir, "*.json")))
+            tmp_files = glob(os.path.join(workdir, "*.nii.gz"))
+            tmp_files.extend(glob(os.path.join(workdir, "*.json")))
 
             if tmp_files:
                 list(map(os.remove, tmp_files))
 
-    elif conversion_tool == 'dimon':
+    def _dimon(self, bids_fpath, dcm_fpath):
+        pass
+    #
+    #     dcm_dir = os.path.dirname(dcm_fpath)
+    #
+    #     bids_dir = os.path.dirname(bids_fpath)
+    #     bids_fname = os.path.basename(bids_fpath).split(".")[0]
+    #
+    #     # Create the bids output directory if it does not exist
+    #     if not os.path.isdir(os.path.dirname(bids_dir)):
+    #         create_path(os.path.dirname(bids_dir))
+    #
+    #     workdir = dcm_dir
+    #
+    #     # IMPLEMENT GENERATION OF BIDS METADATA FILES WHEN USING DIMON FOR CONVERSION OF DCM FILES
+    #
+    #     cmd = [
+    #         "Dimon",
+    #         "-infile_pattern",
+    #         os.path.join(workdir, "*.dcm"),
+    #         "-gert_create_dataset",
+    #         "-gert_quit_on_err",
+    #         "-gert_to3d_prefix",
+    #         "{}.nii.gz".format(bids_fname)
+    #     ]
+    #
+    #     dimon_env = os.environ.copy()
+    #     dimon_env['AFNI_TO3D_OUTLIERS'] = 'No'
+    #
+    #     try:
+    #
+    #         result = check_output(cmd, stderr=STDOUT, env=dimon_env, cwd=workdir, universal_newlines=True)
+    #
+    #         # Check the contents of stdout for the -quit_on_err flag because to3d returns a success code
+    #         # even if it terminates because the -quit_on_err flag was thrown
+    #         if "to3d kept from going into interactive mode by option -quit_on_err" in result:
+    #
+    #             log_str = LOG_MESSAGES['dimon_error'].format(dcm_fpath, " ".join(cmd), 0)
+    #
+    #             if result:
+    #                 log_str += LOG_MESSAGES['output'].format(result)
+    #
+    #             self.log.info(log_str)
+    #
+    #             return dcm_fpath, False
+    #
+    #         shutil.move(os.path.join(workdir, "{}.nii.gz".format(out_fpath)),
+    #                     os.path.join(os.path.dirname(bids_fpath), "{}.nii.gz".format(out_fname)))
+    #
+    #         dcm_file = [f for f in os.listdir(dcm_dir) if ".dcm" in f][0]
+    #
+    #         log_str = LOG_MESSAGES['success_converted'].format(os.path.join(dcm_dir, dcm_file), out_fname,
+    #                                                            " ".join(cmd), 0)
+    #
+    #         if result:
+    #             log_str += LOG_MESSAGES['output'].format(result)
+    #
+    #         log_output(log_str, logger=logger, semaphore=semaphore)
+    #
+    #         return dcm_dir, True
+    #
+    #     except CalledProcessError as e:
+    #
+    #         log_str = LOG_MESSAGES['dimon_error'].format(dcm_dir, " ".join(cmd), e.returncode)
+    #
+    #         if e.output:
+    #             log_str += LOG_MESSAGES['output'].format(e.output)
+    #
+    #         log_output(log_str, level="ERROR", logger=logger, semaphore=semaphore)
+    #
+    #         return dcm_dir, False
+    #
+    #     finally:
+    #
+    #         # Clean up temporary files
+    #         tmp_files = glob(os.path.join(dimon_workdir, "GERT_Reco_dicom*"))
+    #         tmp_files.extend(glob(os.path.join(dimon_workdir, "dimon.files.run.*")))
+    #
+    #         if tmp_files:
+    #             list(map(os.remove, tmp_files))
+    #
+    #
+    #
+    #
 
-        dimon_workdir = dcm_dir
 
-        # IMPLEMENT GENERATION OF BIDS METADATA FILES WHEN USING DIMON FOR CONVERSION OF DCM FILES
-
-        cmd = [
-            "Dimon",
-            "-infile_pattern",
-            os.path.join(dcm_dir, "*.dcm"),
-            "-gert_create_dataset",
-            "-gert_quit_on_err",
-            "-gert_to3d_prefix",
-            "{}.nii.gz".format(out_fname)
-        ]
-
-        dimon_env = os.environ.copy()
-        dimon_env['AFNI_TO3D_OUTLIERS'] = 'No'
-
-        try:
-
-            result = check_output(cmd, stderr=STDOUT, env=dimon_env, cwd=dimon_workdir, universal_newlines=True)
-
-            # Check the contents of stdout for the -quit_on_err flag because to3d returns a success code
-            # even if it terminates because the -quit_on_err flag was thrown
-            if "to3d kept from going into interactive mode by option -quit_on_err" in result:
-
-                log_str = LOG_MESSAGES['dimon_error'].format(dcm_dir, " ".join(cmd), 0)
-
-                if result:
-                    log_str += LOG_MESSAGES['output'].format(result)
-
-                log_output(log_str, level="ERROR", logger=logger, semaphore=semaphore)
-
-                return dcm_dir, False
-
-            shutil.move(os.path.join(dimon_workdir, "{}.nii.gz".format(out_fname)),
-                        os.path.join(out_dir, "{}.nii.gz".format(out_fname)))
-
-            dcm_file = [f for f in os.listdir(dcm_dir) if ".dcm" in f][0]
-
-            log_str = LOG_MESSAGES['success_converted'].format(os.path.join(dcm_dir, dcm_file), out_fname,
-                                                               " ".join(cmd), 0)
-
-            if result:
-                log_str += LOG_MESSAGES['output'].format(result)
-
-            log_output(log_str, logger=logger, semaphore=semaphore)
-
-            return dcm_dir, True
-
-        except CalledProcessError as e:
-
-            log_str = LOG_MESSAGES['dimon_error'].format(dcm_dir, " ".join(cmd), e.returncode)
-
-            if e.output:
-                log_str += LOG_MESSAGES['output'].format(e.output)
-
-            log_output(log_str, level="ERROR", logger=logger, semaphore=semaphore)
-
-            return dcm_dir, False
-
-        finally:
-
-            # Clean up temporary files
-            tmp_files = glob(os.path.join(dimon_workdir, "GERT_Reco_dicom*"))
-            tmp_files.extend(glob(os.path.join(dimon_workdir, "dimon.files.run.*")))
-
-            if tmp_files:
-                list(map(os.remove, tmp_files))
-
-    else:
-
-        raise NiftyConversionFailure("Tool Error: {} is not a supported conversion tool. Please select 'dcm2niix' or "
-                                     "'dimon'".format(conversion_tool))
-
-
-def convert_to_bids(bids_dir, dicom_dir, subject_map=None, conversion_tool='dcm2niix', logger=None,
-                    nthreads=MAX_WORKERS, overwrite=False, gen_map=False):
+def convert_to_bids(bids_map, conversion_tool='dcm2niix', log=None,
+                    nthreads=MAX_WORKERS, overwrite=False):
 
     tmp_dir = os.path.join(os.getcwd(), "tmp")
 
