@@ -12,6 +12,7 @@ import pandas as pd
 
 from datetime import datetime
 from glob import glob
+from collections import OrderedDict
 
 MAX_WORKERS = multiprocessing.cpu_count() * 5
 
@@ -171,31 +172,32 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, log=None, nthreads=0):
 
                         row['run'] = "run-{}".format(str(curr_run).rjust(run_padding, '0'))
                         curr_run += 1
-                print(mapping_df)
+    mapping_df.sort_values(['subject', 'session', 'task', 'modality', 'run'],
+                           ascending=['True', 'True', 'True', 'True', 'True'], inplace=True)
+    mapping_df.to_csv(path_or_buf=bids_map, index=False, header=True,
+                      columns=['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality',
+                               'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio', 'cardio_physio'])
 
-    mapping_df.to_csv(path_or_buf=bids_map, index=False)
 
-
-def extract_tgz(fpath, out_path='.', logger=None, semaphore=None):
+def extract_tgz(fpath, out_path=None, log=None):
 
     if not tarfile.is_tarfile(fpath):
         raise tarfile.TarError("{} is not a valid tar/gzip file.".format(fpath))
 
     tar = tarfile.open(fpath, "r:gz")
-    # scans_folder = tar.next().name
     fname = fpath.split("/")[-1].split("-")
     scans_folder = os.path.join("{}-{}".format(fname[0], fname[1]), "{}-{}".format(fname[2], fname[3]))
+
+    if not out_path:
+        out_path = os.getcwd()
+        extracted_dir = "{}".format(os.path.join(os.getcwd(), scans_folder))
+    else:
+        extracted_dir = "{}".format(os.path.join(out_path, scans_folder))
+
     tar.extractall(path=out_path)
     tar.close()
 
-    extracted_dir = "{}"
-
-    if out_path == ".":
-        extracted_dir = extracted_dir.format(os.path.join(os.getcwd(), scans_folder))
-    else:
-        extracted_dir = extracted_dir.format(os.path.join(out_path, scans_folder))
-
-    log_output("Extracted file {} to {} directory.".format(fpath, extracted_dir), logger=logger, semaphore=semaphore)
+    log.info("Extracted file {} to {} directory.".format(fpath, extracted_dir))
 
     return extracted_dir
 
@@ -249,12 +251,17 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
             # Verify if there are task, acq, or rec pattern matches
             task = ""
             if bids_type == "func":
-                pattern = tag["task_regexp"]
-                re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-                if re_match:
-                    task = re_match.group(0).strip()
-                else:
-                    task = "notaskspecified"
+                if tag["task"].get('task_regexp', None):
+                    pattern = tag["task_regexp"]
+                    re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
+                    if re_match:
+                        task = re_match.group(0).strip()
+                    else:
+                        task = "notaskspecified"
+                elif tag["task"].get("task_name", None):
+                    task = tag["task"]["task_name"]
+
+                ##### IMPLEMENT ENFORCEMENT OF EITHER OF THE TWO TASK SUBKEYS IN KEYFILE VALIDATOR
 
             acq = ""
             pattern = tag["acq_regexp"]
@@ -272,13 +279,15 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
             resp_physio = ""
             cardio_physio = ""
             if realtime_files:
-                for item in enumerate(realtime_files):
-                    if "ECG" in item and ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in item)):
-                        cardio_physio = item
-                    elif "Resp" in item and ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in item)):
-                        resp_physio = item
+                for physio_dat in realtime_files:
+                    if "ECG" in physio_dat and \
+                            ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in physio_dat)):
+                        cardio_physio = physio_dat
+                    elif "Resp" in physio_dat and \
+                            ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in physio_dat)):
+                        resp_physio = physio_dat
 
-            curr_map = {
+            curr_map = OrderedDict({
                 'subject': [""],
                 'session': [""],
                 'bids_type': [bids_type],
@@ -293,7 +302,7 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 'scan_dir': [dcm_file],
                 'resp_physio': [resp_physio],
                 'cardio_physio': [cardio_physio]
-            }
+            })
 
             return curr_map
 
