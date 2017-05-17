@@ -3,7 +3,7 @@ from __future__ import print_function, unicode_literals
 import os
 import argparse
 
-from converters import convert_to_bids
+from converters import process_bids_map
 from utils import init_log, log_shutdown, gen_map, MAX_WORKERS
 from datetime import datetime
 
@@ -46,6 +46,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--conversion_tool",
+        help="Tool to convert DICOM scans to NIFTI files. Options: dcm2niix (default), dimon.",
+        default='dcm2niix'
+    )
+
+    parser.add_argument(
         "--overwrite",
         help="Overwrite existing files in BIDS data folder.",
         action="store_true",
@@ -82,25 +88,25 @@ if __name__ == "__main__":
         parser.error("Specify either a bids map (--bids_map) or enable automatic conversion mode (--auto) but "
                      " not both.")
 
-    curr_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 
     # Init default files/directories and/or normalized user provided filepaths/directories
     dicom_dir = os.path.abspath(settings.dicom_dir)
 
     if not settings.bids_dir:
-        bids_dir = os.path.join(os.getcwd(), "bids_data_{}".format(curr_time))
+        bids_dir = os.path.join(os.getcwd(), "bids_data_{}".format(start_datetime))
     else:
         bids_dir = os.path.abspath(settings.bids_dir)
 
     if settings.bids_map:
         bids_map = os.path.abspath(settings.bids_map)
     else:
-        bids_map = os.path.join(os.getcwd(), "bids_map_{}.csv".format(curr_time))
+        bids_map = os.path.join(os.getcwd(), "bids_map_{}.csv".format(start_datetime))
 
     if settings.log_fpath:
         log_fpath = os.path.abspath(settings.log_fpath)
     else:
-        log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(curr_time))
+        log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
 
     # Init logger
     log = init_log(log_fpath, settings.debug)
@@ -110,6 +116,7 @@ if __name__ == "__main__":
                    "Generate map: {}\n".format(settings.gen_map) + \
                    "Bids directory: {}\n".format(bids_dir) + \
                    "BIDS map: {}\n".format(bids_map) + \
+                   "Conversion tool: {}\n".format(settings.conversion_tool) +\
                    "Overwrite: {}\n".format(settings.overwrite) + \
                    "Log: {}\n".format(log_fpath) + \
                    "Number of threads: {}".format(settings.nthreads)
@@ -134,16 +141,16 @@ if __name__ == "__main__":
 
         # Use generated map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
-        convert_to_bids(bids_dir=bids_dir, dicom_dir=dicom_dir, bids_map=bids_map, conversion_tool='dcm2niix',
-                        log=log, nthreads=settings.nthreads, overwrite=settings.overwrite)
+        process_bids_map(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, conversion_tool='dcm2niix', log=log,
+                         start_datetime=start_datetime, nthreads=settings.nthreads)
         log.info(LOG_MESSAGES['shutdown'])
 
     elif settings.bids_map:
 
         # Use provided map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
-        convert_to_bids(bids_dir=bids_dir, dicom_dir=dicom_dir, bids_map=bids_map, conversion_tool='dcm2niix',
-                        log=log, nthreads=settings.nthreads, overwrite=settings.overwrite)
+        process_bids_map(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, conversion_tool='dcm2niix', log=log,
+                         start_datetime=start_datetime, nthreads=settings.nthreads)
         log.info(LOG_MESSAGES['shutdown'])
 
     elif settings.gen_map:

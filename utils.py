@@ -197,7 +197,8 @@ def extract_tgz(fpath, out_path=None, log=None):
     tar.extractall(path=out_path)
     tar.close()
 
-    log.info("Extracted file {} to {} directory.".format(fpath, extracted_dir))
+    if log:
+        log.info("Extracted file {} to {} directory.".format(fpath, extracted_dir))
 
     return extracted_dir
 
