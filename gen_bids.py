@@ -134,6 +134,7 @@ if __name__ == "__main__":
     log.info(settings_str)
 
     if settings.auto:
+
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
         gen_map(dicom_dir, bids_map=bids_map, log=log, nthreads=settings.nthreads)
@@ -159,7 +160,6 @@ if __name__ == "__main__":
         log.info(LOG_MESSAGES['start_map'])
         gen_map(dicom_dir, bids_map=bids_map, log=log, nthreads=settings.nthreads)
         log.info(LOG_MESSAGES['gen_map_done'])
-
 
     # Shutdown the log
     log_shutdown(log)

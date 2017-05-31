@@ -2,18 +2,16 @@ from __future__ import print_function, unicode_literals
 
 import os
 import shutil
-import dicom
 import pandas as pd
 import numpy as np
+import random
+import string
 
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
-from utils import create_path, extract_tgz, MAX_WORKERS
-from threading import Semaphore
-from collections import OrderedDict
+from utils import create_path, extract_tgz, init_log
 from datetime import datetime
-from functools import partial
 
 
 LOG_MESSAGES = {
@@ -48,14 +46,25 @@ class DuplicateFile(Exception):
 
 class BIDSConverter(object):
 
+    use_outside_log = False
+
     def __init__(self, conversion_tool='dcm2niix', log=None):
         self.conversion_tool = conversion_tool
-        self.log = log
+        if log:
+            self.log = log
+            self.use_outside_log = True
+        else:
+            self.log = init_log(debug=True)
+
+    def __del__(self):
+        if not self.use_outside_log:
+            for handler in self.log.handlers:
+                self.log.removeHandler(handler)
 
     def convert_to_bids(self, bids_fpath, dcm_dir):
 
         if self.conversion_tool == 'dcm2niix':
-            self._dcm2niix(bids_fpath, dcm_dir)
+            return self._dcm2niix(bids_fpath, dcm_dir)
         # elif self.conversion_tool == 'dimon':
         #     self._dimon(bids_fpath, dcm_dir)
         else:
@@ -65,12 +74,13 @@ class BIDSConverter(object):
 
     def _dcm2niix(self, bids_fpath, dcm_dir):
 
-        bids_dir = os.path.dirname(bids_fpath)
+        bids_dir = os.path.abspath(os.path.dirname(bids_fpath))
+        print(bids_dir)
         bids_fname = os.path.basename(bids_fpath).split(".")[0]
 
         # Create the bids output directory if it does not exist
-        if not os.path.isdir(os.path.dirname(bids_dir)):
-            create_path(os.path.dirname(bids_dir))
+        if not os.path.isdir(bids_dir):
+            create_path(bids_dir)
 
         workdir = dcm_dir
 
@@ -99,11 +109,11 @@ class BIDSConverter(object):
                 [s for s in ([s for s in str(result).split('\n') if "Convert" in s][0].split(" "))
                  if s[0] == '/'][0].split("/")[-1]
 
-            # Move nifti file and json bids file to anat folder
+            # Move nifti file and json bids file to bids folder
             shutil.move(os.path.join(workdir, "{}.nii.gz".format(actual_fname)),
-                        os.path.join(workdir, "{}.nii.gz".format(bids_fname)))
+                        os.path.join(bids_dir, "{}.nii.gz".format(bids_fname)))
             shutil.move(os.path.join(workdir, "{}.json".format(actual_fname)),
-                        os.path.join(workdir, "{}.json".format(bids_fname)))
+                        os.path.join(bids_dir, "{}.json".format(bids_fname)))
 
             log_str = LOG_MESSAGES['success_converted'].format(dcm_dir, bids_fpath, " ".join(cmd), 0)
 
@@ -243,7 +253,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
     mapping = pd.read_csv(bids_map, header=0, index_col=None)
     mapping.replace(np.nan, '', regex=True, inplace=True)
 
-    tgz_files = set()
+    tgz_files = {}
     exec_list = []
 
     for idx, row in mapping.iterrows():
@@ -309,91 +319,64 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
             else:
                 bids_name += '_{}'.format(modality)
 
-        tgz_files.add(os.path.join(dicom_dir, oxy_file))
+        oxy_fpath = os.path.join(dicom_dir, oxy_file)
+        if tgz_files.get(oxy_fpath, None) is None:
+            tgz_files[oxy_fpath] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
 
         exec_list.append({
-            'bids_dir': bids_dir,
-            'bids_name': bids_name,
-            'scan_dir': os.path.join(tmp_dir, scan_dir)
+            'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
+                                                                      bids_name)),
+            'scan_dir': os.path.join(tmp_dir, tgz_files[oxy_fpath], scan_dir)
         })
 
-    if nthreads < 2: # Process sequentially
+    if nthreads < 2:  # Process sequentially
 
-        tgz_func = partial(extract_tgz, out_path=tmp_dir, log=log)
-        list(map(tgz_func, tgz_files))
+        # Extract the TGZ files
+        for tgz_file in tgz_files.keys():
+            extract_tgz(tgz_file, out_path=os.path.join(tmp_dir, tgz_files[tgz_file]), log=log)
 
+        # Convert files to NIFTI
+        converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
+        for exec_item in exec_list:
+            converter.convert_to_bids(exec_item['bids_fpath'], exec_item['scan_dir'])
 
+    else:
 
+        # Extract TGZ files
+        with ThreadPoolExecutor(max_workers=nthreads) as executor:
 
+            futures = []
 
+            for tgz_file in tgz_files.keys():
+                futures.append(executor.submit(extract_tgz, tgz_file,
+                                               out_path=os.path.join(tmp_dir, tgz_files[tgz_file]), log=log))
+            wait(futures)
 
+            for future in futures:
+                tgz_fpath, success = future.result()
 
+                if not success:
+                    log.error("Could not extract file {}".format(tgz_fpath))
 
+        # Convert files to Nifti
+        with ThreadPoolExecutor(max_workers=nthreads) as executor:
 
+            converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
+            futures = []
 
+            for exec_item in exec_list:
+                futures.append(executor.submit(converter.convert_to_bids, exec_item['bids_fpath'],
+                                               exec_item['scan_dir']))
+            wait(futures)
 
+            for future in futures:
 
-    # # If the program is to run in multiple threads, create a Semaphore to be passed into the threads so they can
-    # # acquire locks if necessary
-    # if nthreads > 0:
-    #     thread_semaphore = Semaphore(value=1)
-    # else:
-    #     thread_semaphore = None
-    #
-    # # If BIDS directory exists, verify that it's either empty or that overwrite is allowed. Otherwise create directory.
-    # if os.path.isdir(bids_dir):
-    #
-    #     bids_files = glob(os.path.join(bids_dir, '*'))
-    #
-    #     if bids_files:
-    #         if not overwrite:
-    #             raise DuplicateFile("The BIDS directory is not empty and --overwrite is set to False. Aborting.")
-    #         else:
-    #             rm_files = glob(os.path.join(bids_dir, '*'))
-    #             list(map(shutil.rmtree, rm_files))
-    # else:
-    #     create_path(bids_dir)
-    #
-    # if nthreads > 0:    # Run in multiple threads
-    #
-    #     futures = []
-    #
-    #     with ThreadPoolExecutor(max_workers=nthreads) as executor:
-    #
-    #         for bids_fname, fpaths in exec_map.items():
-    #
-    #             dcm_fpath = fpaths[1]
-    #             bids_fpath = fpaths[0]
-    #
-    #             futures.append(executor.submit(dcm_to_nifti, dcm_dir=dcm_fpath, out_fname=bids_fname,
-    #                                            out_dir=bids_fpath, conversion_tool=conversion_tool, bids_meta=True,
-    #                                            logger=logger, semaphore=thread_semaphore))
-    #             # FOR TESTING
-    #             # break
-    #             #######
-    #
-    #         wait(futures)
-    #
-    #         for future in futures:
-    #             dcm_dir, success = future.result()
-    #
-    #             if not success:
-    #                 log_output("Could not convert DICOM series in {}".format(dcm_dir), semaphore=thread_semaphore)
-    #
-    # else:   # Run sequentially
-    #
-    #     for bids_fname, fpaths in exec_map.items():
-    #
-    #         dcm_fpath = fpaths[1]
-    #         bids_fpath = fpaths[0]
-    #
-    #         dcm_dir, success = dcm_to_nifti(dcm_dir=dcm_fpath, out_fname=bids_fname, out_dir=bids_fpath,
-    #                                         conversion_tool='dcm2niix', bids_meta=True, logger=logger)
-    #
-    #         if not success:
-    #             log_output("Could not convert DICOM series in {}".format(dcm_dir))
+                dcm_dir, success = future.result()
 
+                if not success:
+                    log.error("Could not convert DICOM series in {}".format(dcm_dir))
 
     # Remove tmp dir if it was created
     if os.path.isdir(tmp_dir):
+        log.info("Removing temporary files")
         shutil.rmtree(tmp_dir)

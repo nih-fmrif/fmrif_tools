@@ -19,7 +19,7 @@ MAX_WORKERS = multiprocessing.cpu_count() * 5
 date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
-def init_log(log_fpath, debug=False):
+def init_log(log_fpath=None, debug=False):
 
     log = logging.getLogger('oxy2bids')
 
@@ -41,21 +41,23 @@ def init_log(log_fpath, debug=False):
     console_handler.setFormatter(log_fmt)
     log.addHandler(console_handler)
 
-    # Log handler for file
-    file_handler = logging.FileHandler(log_fpath)
-    if debug:
-        file_handler.setLevel(logging.DEBUG)
-    else:
-        file_handler.setLevel(logging.INFO)
+    if log_fpath:
+        # Log handler for file
+        file_handler = logging.FileHandler(log_fpath)
+        if debug:
+            file_handler.setLevel(logging.DEBUG)
+        else:
+            file_handler.setLevel(logging.INFO)
 
-    file_handler.setFormatter(log_fmt)
-    log.addHandler(file_handler)
+        file_handler.setFormatter(log_fmt)
+        log.addHandler(file_handler)
 
     return log
 
 
 def log_shutdown(log):
-    log.shutdown()
+    logging.shutdown()
+    del log
 
 
 def create_path(path, semaphore=None):
@@ -182,7 +184,7 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, log=None, nthreads=0):
 def extract_tgz(fpath, out_path=None, log=None):
 
     if not tarfile.is_tarfile(fpath):
-        raise tarfile.TarError("{} is not a valid tar/gzip file.".format(fpath))
+        return fpath, False
 
     tar = tarfile.open(fpath, "r:gz")
     fname = fpath.split("/")[-1].split("-")
@@ -200,7 +202,7 @@ def extract_tgz(fpath, out_path=None, log=None):
     if log:
         log.info("Extracted file {} to {} directory.".format(fpath, extracted_dir))
 
-    return extracted_dir
+    return fpath, True
 
 
 def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
