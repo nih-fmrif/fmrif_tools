@@ -3,12 +3,12 @@ from __future__ import print_function, unicode_literals
 import os
 import argparse
 
-from converters import process_bids_map
-from utils import init_log, log_shutdown, gen_map, MAX_WORKERS
+from oxy2bids.converters import process_bids_map
+from oxy2bids.utils import init_log, log_shutdown, gen_map, MAX_WORKERS
 from datetime import datetime
 
 
-if __name__ == "__main__":
+def main():
 
     parser = argparse.ArgumentParser()
 
@@ -116,7 +116,7 @@ if __name__ == "__main__":
                    "Generate map: {}\n".format(settings.gen_map) + \
                    "Bids directory: {}\n".format(bids_dir) + \
                    "BIDS map: {}\n".format(bids_map) + \
-                   "Conversion tool: {}\n".format(settings.conversion_tool) +\
+                   "Conversion tool: {}\n".format(settings.conversion_tool) + \
                    "Overwrite: {}\n".format(settings.overwrite) + \
                    "Log: {}\n".format(log_fpath) + \
                    "Number of threads: {}".format(settings.nthreads)
@@ -164,3 +164,6 @@ if __name__ == "__main__":
     # Shutdown the log
     log_shutdown(log)
 
+
+if __name__ == "__main__":
+    main()

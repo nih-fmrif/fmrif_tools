@@ -10,7 +10,7 @@ import string
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
-from utils import create_path, extract_tgz, init_log
+from oxy2bids.utils import create_path, extract_tgz, init_log
 from datetime import datetime
 
 

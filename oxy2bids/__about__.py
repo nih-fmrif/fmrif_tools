@@ -33,8 +33,6 @@ CLASSIFIERS = [
     'Programming Language :: Python :: 2.7',
 ]
 
-SETUP_REQUIRES = []
-
 REQUIRES = [
     'click==6.6',
     'configparser==3.5.0',
@@ -52,7 +50,7 @@ REQUIRES = [
     'prov==1.5.0',
     'pydicom==0.9.9',
     'pyparsing==2.1.10',
-    'python - dateutil==2.6.0',
+    'python-dateutil==2.6.0',
     'pytz==2017.2',
     'rdflib==4.2.1',
     'scipy==0.18.1',
