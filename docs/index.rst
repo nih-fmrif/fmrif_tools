@@ -104,6 +104,34 @@ Basic Command and Flags
     * The basic command structure of **oxy2bids** is as follows,
           ``oxy2bids [options] <dicom data directory>``
 
+    * The following **options** are allowed:
+
+        **--auto**
+            Automatically generates a BIDS hierarchy based on input DICOM files, assuming the
+            generated BIDS mapping is correct. Not recommended. Default: False.
+        **--gen_map**
+            Generate a DICOM to BIDS map, which can be then verified and fined tuned as necessary
+            prior to conversion of the oxygen/gold datasets into a BIDS-structured dataset. Default: True.
+        **--bids_dir**
+            Path to desired top-level output directory of BIDS-formatted dataset. If not specified,
+            a directory called **bids_data_<timestamp>** will be created in the current working directory.
+        **--bids_map**
+            Path to a preexisting DICOM to BIDS mapping file. Overrides **--gen_map** option.
+        **--log_filepath**
+            Path to the log file. Default will be a file named **oxy2bids_<timestamp>.log** in the current
+            working directory.
+        **--conversion_tool**
+            Specify the tool that will convert DICOM series into NIFTI files. Note that at the present time,
+            only **dcm2niix** is supported. Default: dcm2niix.
+        **--overwrite**
+            If files exist in BIDS data folder, overwrite them. **Note: Not implemented yet.** Default: False.
+        **--nthreads**
+            Number of threads the program should use when parsing the DICOM files and generating the BIDS dataset.
+        **--debug**
+            Outputs useful information for debugging to the log and console.
+
+    * For more information on how to combine these flags, see the supported use cases in the following sections.
+
 -------------------------------------------------------------------------------------------------------------------------------------------
 Use Case 1 (Recommended) - Generate a BIDS mapping file, manually inspect it and correct it, then generate BIDS tree based on generated map
 -------------------------------------------------------------------------------------------------------------------------------------------
