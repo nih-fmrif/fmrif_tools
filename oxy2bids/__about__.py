@@ -12,7 +12,7 @@ __maintainer__ = 'Jan Varada'
 __copyright__ = ('Copyright {}, Functional MRI Facility, National Institute of Mental Health, National Institutes of '
                  'Health'.format(date.today().year))
 __credits__ = 'Jan Varada'
-__license__ = 'TBD'
+__license__ = '3-clause BSD'
 __status__ = 'Prototype'
 __description__ = 'Tools to perform common task with data generated at the FMRIF facility at the NIH'
 __longdesc__ = ('This package contains tools to perform common tasks with the data generated at the Functional'
@@ -28,7 +28,7 @@ CLASSIFIERS = [
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Science/Research',
     'Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator',
-    # 'License :: OSI Approved :: BSD License',
+    'License :: OSI Approved :: BSD License',
     'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 2.7',
 ]

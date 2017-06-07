@@ -19,7 +19,7 @@ Introduction
           directory structure
 
     For more information, or assistance, contact the lead developer at:
-        ``jan.varada -at- nih -dot- gov``.
+        ``jan.varada -at- nih -dot- gov``
 
     Please submit any bug reports or feature requests at `Report bugs or Feature Requests <https://github.com/nih-fmrif/fmrif_tools/issues>`_.
 
@@ -70,9 +70,16 @@ oxy2bids
 Introduction
 ============
 
+    **oxy2bids** is a python utility that takes in a series of DICOM scans from Oxygen, generates an intermediate csv file
+    containing a mapping of DICOM scans to BIDS hierarchy, and then converts the scans to the appropriate BIDS hierarchy. It
+    uses **dcm2niix** behinds the scenes to convert the DICOM scans to NIFTI format. Support for AFNI's **Dimon** DICOM to NIFTI
+    conversion tool will be implemented in the near future.
+
 =====
 Usage
 =====
+
+
 
 -----
 Flags
@@ -104,3 +111,33 @@ Query DICOM datasets for custom keywords
 *******
 License
 *******
+
+Copyright (c) 2017, the Functional Magnetic Resonance Imaging Facility (FMRIF) at the National Institute of Mental Health,
+National Institutes of Health.
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the names of fmrif_tools, oxy2bids, nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
