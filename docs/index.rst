@@ -101,7 +101,8 @@ Usage
 Basic Command and Flags
 -----------------------
 
-    * The basic command structure of **oxy2bids** is as follows,
+    * The basic command structure of **oxy2bids** is as follows:
+
           ``oxy2bids [options] <dicom data directory>``
 
     * The following **options** are allowed:
