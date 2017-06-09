@@ -162,7 +162,7 @@ Default BIDS tags recognized in DICOM header
 
     **Custom Tags**
 
-        See **Advanced** section of this document for more information on defining custom
+        See **Advanced Usage** section of this document for more information on defining custom
         tags or searching for tags in different DICOM header fields.
 
 -----------------------
@@ -188,7 +188,11 @@ Basic Command and Flags
             Path to a preexisting DICOM to BIDS mapping file. Overrides **--gen_map** option.
         **--dicom_tags**
             Path to a DICOM header tag specification file.
-        **--log_filepath**
+        **--ignore_default_tags**
+            Ignore the default BIDS tags if custom tags if custom tags are
+            provided with the **--dicom_tags** flags. Otherwise the custom tags
+            are considered on top of the default ones. Default: False.
+        **--log**
             Path to the log file. Default will be a file named **oxy2bids_<timestamp>.log** in the current
             working directory.
         **--conversion_tool**
