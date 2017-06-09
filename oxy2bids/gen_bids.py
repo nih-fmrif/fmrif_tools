@@ -46,6 +46,20 @@ def main():
     )
 
     parser.add_argument(
+        "--dicom_tags",
+        help="Path to a DICOM header tag specification file.",
+        default=None
+    )
+
+    parser.add_argument(
+        "--ignore_default_tags",
+        help="Ignore the default BIDS tags if custom tags if custom tags are "
+             "provided with the --dicom_tags flags. Otherwise the custom tags "
+             "are considered on top of the default ones.",
+        default=False
+    )
+
+    parser.add_argument(
         "--conversion_tool",
         help="Tool to convert DICOM scans to NIFTI files. Options: dcm2niix (default), dimon.",
         default='dcm2niix'
@@ -59,7 +73,7 @@ def main():
     )
 
     parser.add_argument(
-        "--log_fpath",
+        "--log",
         help="Log filepath. Default will be oxy2bids_<timestamp>.log in current working directory.",
         default=None
     )
@@ -88,6 +102,10 @@ def main():
         parser.error("Specify either a bids map (--bids_map) or enable automatic conversion mode (--auto) but "
                      " not both.")
 
+    if settings.ignore_default_tags and not settings.dicom_tags:
+        parser.error("If the --ignore_default_tags is set to True, you must provide a "
+                     "custom tags file via the --dicom_tags flag.")
+
     start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 
     # Init default files/directories and/or normalized user provided filepaths/directories
@@ -103,8 +121,8 @@ def main():
     else:
         bids_map = os.path.join(os.getcwd(), "bids_map_{}.csv".format(start_datetime))
 
-    if settings.log_fpath:
-        log_fpath = os.path.abspath(settings.log_fpath)
+    if settings.log:
+        log_fpath = os.path.abspath(settings.log)
     else:
         log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
 
@@ -116,6 +134,9 @@ def main():
                    "Generate map: {}\n".format(settings.gen_map) + \
                    "Bids directory: {}\n".format(bids_dir) + \
                    "BIDS map: {}\n".format(bids_map) + \
+                   "Automatic analysis: {}\n".format(settings.auto) +\
+                   "DICOM tags file: {}\n".format("default" if not settings.dicom_tags else settings.dicom_tags) +\
+                   "Ignore default DICOM tags: {}\n".format(settings.ignore_default_tags) +\
                    "Conversion tool: {}\n".format(settings.conversion_tool) + \
                    "Overwrite: {}\n".format(settings.overwrite) + \
                    "Log: {}\n".format(log_fpath) + \
