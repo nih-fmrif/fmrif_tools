@@ -126,6 +126,11 @@ def main():
     else:
         log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
 
+    if settings.dicom_tags:
+        custom_keys = os.path.abspath(settings.dicom_tags)
+    else:
+        custom_keys = None
+
     # Init logger
     log = init_log(log_fpath, settings.debug)
 
@@ -135,7 +140,7 @@ def main():
                    "Bids directory: {}\n".format(bids_dir) + \
                    "BIDS map: {}\n".format(bids_map) + \
                    "Automatic analysis: {}\n".format(settings.auto) +\
-                   "DICOM tags file: {}\n".format("default" if not settings.dicom_tags else settings.dicom_tags) +\
+                   "DICOM tags file: {}\n".format("default" if not custom_keys else custom_keys) +\
                    "Ignore default DICOM tags: {}\n".format(settings.ignore_default_tags) +\
                    "Conversion tool: {}\n".format(settings.conversion_tool) + \
                    "Overwrite: {}\n".format(settings.overwrite) + \
@@ -158,7 +163,8 @@ def main():
 
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
-        gen_map(dicom_dir, bids_map=bids_map, log=log, nthreads=settings.nthreads)
+        gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
+                log=log, nthreads=settings.nthreads)
         log.info(LOG_MESSAGES['gen_map_done'])
 
         # Use generated map to convert files
@@ -179,7 +185,8 @@ def main():
 
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
-        gen_map(dicom_dir, bids_map=bids_map, log=log, nthreads=settings.nthreads)
+        gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
+                log=log, nthreads=settings.nthreads)
         log.info(LOG_MESSAGES['gen_map_done'])
 
     # Shutdown the log

@@ -8,7 +8,9 @@ import multiprocessing
 import dicom
 import logging
 import json
+import pkg_resources
 import pandas as pd
+
 
 from datetime import datetime
 from glob import glob
@@ -75,15 +77,30 @@ def create_path(path, semaphore=None):
         semaphore.release()
 
 
-def gen_map(dcm_dir, bids_map, custom_keys=None, log=None, nthreads=0):
+def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=None, nthreads=0):
+
+    default_keys = pkg_resources.resource_filename("oxy2bids", "data/bids_keys.json")
+
+    log.info("Parsing BIDS key file...")
 
     if custom_keys:
-        key_file = custom_keys
-    else:
-        key_file = "bids_keys.json"
+        if ignore_default_tags:
+            with open(custom_keys) as ckeys:
+                bids_keys = json.load(ckeys)
+        else:
+            with open(default_keys) as dkeys:
+                bids_keys = json.load(dkeys)
+            with open(custom_keys) as ckeys:
+                cust_keys = json.load(ckeys)
 
-    with open(key_file) as f:
-        bids_keys = json.load(f)
+            for scan_type in bids_keys.keys():
+                if cust_keys.get('scan_type', None):
+                    bids_keys[scan_type].extend(cust_keys[scan_type])
+    else:
+        with open(default_keys) as dkeys:
+            bids_keys = json.load(dkeys)
+
+    log.info("BIDS key file parsed!")
 
     tgz_files = glob(os.path.join(dcm_dir, "*.tgz"))
 
@@ -92,28 +109,31 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, log=None, nthreads=0):
                                        'patient_id', 'scan_datetime', 'oxy_file',
                                        'scan_dir', 'resp_physio', 'cardio_physio'])
 
+    log.info("Parsing DICOM files...")
+
     for tgz_file in tgz_files:
 
         mr_folders_checked = []
+        rt_folders_checked = []
         dicom_files = []
         realtime_files = []
+
+        log.info("Parsing file {}...".format(tgz_file))
 
         tar = tarfile.open(tgz_file)
         tar_files = tar.getmembers()
 
         for tar_file in tar_files:
 
-            split_name = tar_file.name.split('/')
-            tar_file_dir = "/".join(split_name[:3])
+            tar_file_dir = "/".join(tar_file.name.split('/')[:-1])
 
-            if len(split_name) == 4 and ".dcm" in split_name[-1] and 'mr_' in split_name[-2] and \
-               (tar_file_dir not in mr_folders_checked):
-
+            if tar_file.name[-4:] == ".dcm" and (tar_file_dir not in mr_folders_checked):
                 dicom_files.append(tar_file.name)
                 mr_folders_checked.append(tar_file_dir)
 
-            if len(split_name) == 4 and (".1D" in split_name[-1]) and (split_name[-2] == "realtime"):
+            if tar_file.name[-3:] == ".1D" and "realtime" in tar_file.name and (tar_file_dir not in rt_folders_checked):
                 realtime_files.append(tar_file.name)
+                rt_folders_checked.append(tar_file_dir)
 
         for dcm_file in dicom_files:
 
@@ -124,6 +144,8 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, log=None, nthreads=0):
                 mapping_df = pd.concat([mapping_df, tmp_df], ignore_index=True)
 
         tar.close()
+
+        log.info("Finished parsing {}!".format(tgz_file))
 
     # Set the BIDS subjects based on unique patient id
     unique_ids = mapping_df['patient_id'].unique()
