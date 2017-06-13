@@ -1,37 +1,21 @@
-<h3>BIDS TAGS</h3>
+<h3>FMRIF TOOLS</h3>
 
-<b>Anatomical Files:</b>
+The **fmrif_tools** package contains a set of python utilities to aid in the processing and manipulation of scanner
+data stored in the Gold and Oxygen archive systems at the Functional Magnetic Resonance Imaging Facility (FMRIF) at
+the National Institutes of Health. The utilities run under either Python 2.7+ or Python 3.5+.
 
-"T1w",  // T1 weighted <br>
-"T2w",  // T2 weighted <br>
-"T1map",    // Quantitative T1 map <br>
-"T2map",    // Quantitative T2 map <br>
-"FLAIR",    // FLAIR <br>
-"FLASH",    // FLASH <br>
-"PD",   // Proton Density <br>
-"PDT2", // Combined PD/T2 <br>
-"inplaneT1",    // T1-weighted anatomical image matched to functional acquisition <br>
-"inplaneT2",    // T2-weighted anatomical image matched to functional acquisition <br>
-"angio",    // Angiography <br>
-"defacemask",   // Mask used for defacing <br>
-"SWImageandphase"   // Magnitude and correspodning pohase images of the SWI <br>
+<h4>Current utilities:</h4>
+* **oxy2bids** - A utility to convert DICOM scans downloaded from Gold and Oxygen into a BIDS compatible directory
+  directory structure
+* **biounpack** (**Coming Soon**) - A utility to extract physiological recording data from biopack files and save it
+  as independent respiratory, cardiac, and trigger 1D data files.
+  
+For usage instructions, please read the full documentation at:
 
-<b>Functional Files:</b>
+http://fmrif-tools.readthedocs.io/en/latest/
+  
+For more information, or assistance, contact the lead developer at: 
 
-"bold",     // BOLD EPI scans <br>
-"sbref"     // Single-band reference file for multiband acquisitions <br>
+* jan.varada -at- nih -dot- gov
 
-* For functional tasks, also add task name as follows: "task-(name)" <br>
-
-<b>DTI Files:</b>
-
-"multiband" <br>
-
-<b>Fieldmap Files:</b>
-
-"phase(num?)", <br>
-"phasediff(num?)", <br>
-"frequency", <br>
-"magnitude(num?)", <br>
-"fieldmap", <br>
-"dir-<index>" <br>
+Please submit any bug reports or feature requests at: <a href="https://github.com/nih-fmrif/fmrif_tools/issues">Report bugs or Feature Requests</a>
