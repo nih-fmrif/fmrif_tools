@@ -102,7 +102,7 @@ class BIDSConverter(object):
     def convert_to_bids(self, bids_fpath, dcm_dir, physio):
 
         if self.conversion_tool == 'dcm2niix':
-            return self._dcm2niix(bids_fpath, dcm_dir)
+            return self._dcm2niix(bids_fpath, dcm_dir, physio)
         # elif self.conversion_tool == 'dimon':
         #     self._dimon(bids_fpath, dcm_dir)
         else:
@@ -161,7 +161,6 @@ class BIDSConverter(object):
             self.log.info(log_str)
 
             if physio['resp'] or physio['cardiac']:
-
                 self.physio_to_bids(bids_fname=bids_fname, bids_dir=bids_dir, resp_physio=physio['resp'],
                                     cardiac_physio=physio['cardiac'])
 
