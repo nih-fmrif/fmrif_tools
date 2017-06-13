@@ -305,7 +305,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
     for idx, row in mapping.iterrows():
 
         subject, session, task, acq, rec, run, modality, oxy_file, \
-        scan_dir, resp_physio, cardio_physio = parse_bids_map_row(row)
+        scan_dir, resp_physio, cardiac_physio = parse_bids_map_row(row)
 
         bids_name = subject
 
@@ -374,7 +374,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
             'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
                                                                       bids_name)),
             'scan_dir': os.path.join(tmp_dir, tgz_files[oxy_fpath], scan_dir),
-            'physio': {'resp': resp_physio, 'cardiac': cardio_physio}
+            'physio': {'resp': resp_physio, 'cardiac': cardiac_physio}
         })
 
     if nthreads < 2:  # Process sequentially
