@@ -199,7 +199,7 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
                            ascending=['True', 'True', 'True', 'True', 'True'], inplace=True)
     mapping_df.to_csv(path_or_buf=bids_map, index=False, header=True,
                       columns=['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality',
-                               'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio', 'cardio_physio'])
+                               'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio', 'cardiac_physio'])
 
 
 def extract_tgz(fpath, out_path=None, log=None):
