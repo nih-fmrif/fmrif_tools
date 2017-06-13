@@ -106,7 +106,7 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
     mapping_df = pd.DataFrame(columns=['subject', 'session', 'bids_type', 'task',
                                        'acq', 'rec', 'run', 'modality',
                                        'patient_id', 'scan_datetime', 'oxy_file',
-                                       'scan_dir', 'resp_physio', 'cardio_physio'])
+                                       'scan_dir', 'resp_physio', 'cardiac_physio'])
 
     log.info("Parsing DICOM files...")
 
