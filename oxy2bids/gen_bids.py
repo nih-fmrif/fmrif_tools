@@ -56,6 +56,7 @@ def main():
         help="Ignore the default BIDS tags if custom tags if custom tags are "
              "provided with the --dicom_tags flags. Otherwise the custom tags "
              "are considered on top of the default ones.",
+        action='store_true',
         default=False
     )
 
