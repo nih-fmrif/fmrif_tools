@@ -373,7 +373,9 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
             'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
                                                                       bids_name)),
             'scan_dir': os.path.join(tmp_dir, tgz_files[oxy_fpath], scan_dir),
-            'physio': {'resp': resp_physio, 'cardiac': cardiac_physio}
+            'physio': {
+                'resp': '' if not resp_physio else os.path.join(tmp_dir, tgz_files[oxy_fpath], resp_physio),
+                'cardiac': '' if not cardiac_physio else os.path.join(tmp_dir, tgz_files[oxy_fpath], cardiac_physio)}
         })
 
     if nthreads < 2:  # Process sequentially
