@@ -11,7 +11,6 @@ import json
 import pkg_resources
 import pandas as pd
 
-
 from datetime import datetime
 from glob import glob
 from collections import OrderedDict
@@ -286,7 +285,7 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 elif tag["task"].get("task_name", None):
                     task = tag["task"]["task_name"]
 
-                ##### IMPLEMENT ENFORCEMENT OF EITHER OF THE TWO TASK SUBKEYS IN KEYFILE VALIDATOR
+                # Todo: IMPLEMENT ENFORCEMENT OF EITHER OF THE TWO TASK SUBKEYS IN KEYFILE VALIDATOR
 
             acq = ""
             pattern = tag["acq_regexp"]
@@ -302,12 +301,12 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                     rec = re_match.group(0).strip()
 
             resp_physio = ""
-            cardio_physio = ""
+            cardiac_physio = ""
             if realtime_files:
                 for physio_dat in realtime_files:
                     if "ECG" in physio_dat and \
                             ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in physio_dat)):
-                        cardio_physio = physio_dat
+                        cardiac_physio = physio_dat
                     elif "Resp" in physio_dat and \
                             ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in physio_dat)):
                         resp_physio = physio_dat
@@ -326,7 +325,7 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 'oxy_file': ["{}-DICOM.tgz".format("-".join(dcm_file.split("/")[:2]))],
                 'scan_dir': [os.path.dirname(dcm_file)],
                 'resp_physio': [resp_physio],
-                'cardio_physio': [cardio_physio]
+                'cardiac_physio': [cardiac_physio]
             })
 
             return curr_map

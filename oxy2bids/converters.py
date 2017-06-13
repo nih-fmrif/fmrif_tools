@@ -6,12 +6,14 @@ import pandas as pd
 import numpy as np
 import random
 import string
+import json
 
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
 from oxy2bids.utils import create_path, extract_tgz, init_log
 from datetime import datetime
+from collections import OrderedDict
 
 
 LOG_MESSAGES = {
@@ -61,7 +63,43 @@ class BIDSConverter(object):
             for handler in self.log.handlers:
                 self.log.removeHandler(handler)
 
-    def convert_to_bids(self, bids_fpath, dcm_dir):
+    def physio_to_bids(self, bids_fname, bids_dir, resp_physio=None, cardiac_physio=None):
+
+        if resp_physio or cardiac_physio:
+
+            self.log.info("Converting physio files to BIDS...")
+            physio_df = pd.DataFrame()
+            cols = []
+
+            if cardiac_physio:
+                cardio_df = pd.read_csv(cardiac_physio, sep="\n", header=None, names=["cardiac"])
+                physio_df = physio_df.append(cardio_df)
+                cols.append("cardiac")
+
+            if resp_physio:
+                resp_df = pd.read_csv(resp_physio, sep="\n", header=None, names=["respiratory"])
+                physio_df = physio_df.join(resp_df)
+                cols.append("respiratory")
+
+            # Save TSV file
+            if bids_fname.endswith('_bold'):
+                bids_fname = bids_fname[:-5]
+
+            physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
+                             header=False, compression="gzip")
+
+            physio_meta = OrderedDict({
+                "SamplingFrequency": 50,
+                "StartTime": 0,
+                "Columns": cols
+            })
+
+            with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
+                json.dump(physio_meta, physio_json)
+
+            self.log.info("Finished converting physio files to BIDS...")
+
+    def convert_to_bids(self, bids_fpath, dcm_dir, physio):
 
         if self.conversion_tool == 'dcm2niix':
             return self._dcm2niix(bids_fpath, dcm_dir)
@@ -72,7 +110,7 @@ class BIDSConverter(object):
                 "Tool Error: {} is not a supported conversion tool. Please select 'dcm2niix' or "
                 "'dimon'".format(self.conversion_tool))
 
-    def _dcm2niix(self, bids_fpath, dcm_dir):
+    def _dcm2niix(self, bids_fpath, dcm_dir, physio):
 
         bids_dir = os.path.abspath(os.path.dirname(bids_fpath))
         print(bids_dir)
@@ -121,6 +159,11 @@ class BIDSConverter(object):
                 log_str += LOG_MESSAGES['output'].format(result)
 
             self.log.info(log_str)
+
+            if physio['resp'] or physio['cardiac']:
+
+                self.physio_to_bids(bids_fname=bids_fname, bids_dir=bids_dir, resp_physio=physio['resp'],
+                                    cardiac_physio=physio['cardiac'])
 
             return dcm_dir, True
 
@@ -238,11 +281,14 @@ def parse_bids_map_row(row):
     modality = row['modality']
     oxy_file = row['oxy_file']
     scan_dir = row['scan_dir']
+    resp_physio = row['resp_physio']
+    cardiac_physio = row['cardiac_physio']
 
-    return subject, session, task, acq, rec, run, modality, oxy_file, scan_dir
+    return subject, session, task, acq, rec, run, modality, oxy_file, scan_dir, resp_physio, cardiac_physio
 
 
-def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', start_datetime=None, log=None, nthreads=0, overwrite=False):
+def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', start_datetime=None, log=None,
+                     nthreads=0, overwrite=False):
 
     if not start_datetime:
         start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -258,7 +304,8 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
 
     for idx, row in mapping.iterrows():
 
-        subject, session, task, acq, rec, run, modality, oxy_file, scan_dir = parse_bids_map_row(row)
+        subject, session, task, acq, rec, run, modality, oxy_file, \
+        scan_dir, resp_physio, cardio_physio = parse_bids_map_row(row)
 
         bids_name = subject
 
@@ -326,7 +373,8 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
         exec_list.append({
             'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
                                                                       bids_name)),
-            'scan_dir': os.path.join(tmp_dir, tgz_files[oxy_fpath], scan_dir)
+            'scan_dir': os.path.join(tmp_dir, tgz_files[oxy_fpath], scan_dir),
+            'physio': {'resp': resp_physio, 'cardiac': cardio_physio}
         })
 
     if nthreads < 2:  # Process sequentially
@@ -338,7 +386,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
         # Convert files to NIFTI
         converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
         for exec_item in exec_list:
-            converter.convert_to_bids(exec_item['bids_fpath'], exec_item['scan_dir'])
+            converter.convert_to_bids(exec_item['bids_fpath'], exec_item['scan_dir'], exec_item['physio'])
 
     else:
 
@@ -366,7 +414,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
 
             for exec_item in exec_list:
                 futures.append(executor.submit(converter.convert_to_bids, exec_item['bids_fpath'],
-                                               exec_item['scan_dir']))
+                                               exec_item['scan_dir'], exec_item['physio']))
             wait(futures)
 
             for future in futures:
