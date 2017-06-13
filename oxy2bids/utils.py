@@ -113,7 +113,6 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
     for tgz_file in tgz_files:
 
         mr_folders_checked = []
-        rt_folders_checked = []
         dicom_files = []
         realtime_files = []
 
@@ -130,9 +129,8 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
                 dicom_files.append(tar_file.name)
                 mr_folders_checked.append(tar_file_dir)
 
-            if tar_file.name[-3:] == ".1D" and "realtime" in tar_file.name and (tar_file_dir not in rt_folders_checked):
+            if tar_file.name[-3:] == ".1D" and ("realtime" in tar_file.name):
                 realtime_files.append(tar_file.name)
-                rt_folders_checked.append(tar_file_dir)
 
         for dcm_file in dicom_files:
 
@@ -304,11 +302,12 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
             cardiac_physio = ""
             if realtime_files:
                 for physio_dat in realtime_files:
+                    curr_scan = dcm_file.split("/")[-2].split("_")[-1]
                     if "ECG" in physio_dat and \
-                            ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in physio_dat)):
+                            ("scan_{}".format(curr_scan) in physio_dat):
                         cardiac_physio = physio_dat
                     elif "Resp" in physio_dat and \
-                            ("scan_{}".format(dcm_file.split("/")[-2].split("_")[-1] in physio_dat)):
+                            ("scan_{}".format(curr_scan) in physio_dat):
                         resp_physio = physio_dat
 
             curr_map = OrderedDict({
