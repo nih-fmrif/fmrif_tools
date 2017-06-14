@@ -22,3 +22,5 @@ simplejson==3.10.0
 six==1.10.0
 traits==4.6.0
 xvfbwrapper==0.2.8
+bioread==1.0.4
+matplotlib=2.0.2
