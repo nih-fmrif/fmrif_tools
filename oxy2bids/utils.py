@@ -271,25 +271,26 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 continue
 
             # Verify if there are task, acq, or rec pattern matches
-            task = ""
+            task = "task-NoTaskSpecified"
             if bids_type == "func":
-                if tag["task"].get('task_regexp', None):
+                if tag.get("task_regexp", None):
                     pattern = tag["task_regexp"]
                     re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
                     if re_match:
                         task = re_match.group(0).strip()
-                    else:
-                        task = "notaskspecified"
-                elif tag["task"].get("task_name", None):
-                    task = tag["task"]["task_name"]
+                elif tag.get("task_name", None):
+                    task = tag["task_name"]
 
                 # Todo: IMPLEMENT ENFORCEMENT OF EITHER OF THE TWO TASK SUBKEYS IN KEYFILE VALIDATOR
 
             acq = ""
-            pattern = tag["acq_regexp"]
-            re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-            if re_match:
-                acq = re_match.group(0).strip()
+            if tag.get("acq_regexp", None):
+                pattern = tag["acq_regexp"]
+                re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
+                if re_match:
+                    acq = re_match.group(0).strip()
+            elif tag.get("acq", None):
+                acq = tag["aqc"]
 
             rec = ""
             if tag.get("rec_regexp", None):
@@ -297,6 +298,8 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
                 if re_match:
                     rec = re_match.group(0).strip()
+            elif tag.get("rec", None):
+                rec = tag["rec"]
 
             resp_physio = ""
             cardiac_physio = ""
