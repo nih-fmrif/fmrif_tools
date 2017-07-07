@@ -251,6 +251,7 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 raise Exception('Support for DICOM field {} not implemented.'.format(dicom_field))
 
             # No data was available for this tag
+            print("current dcm_dat: {}".format(dcm_dat))
             if dcm_dat == "":
                 continue
 
@@ -279,8 +280,9 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 continue
 
             # Verify if there are task, acq, or rec pattern matches
-            task = "task-NoTaskSpecified"
+            task = ""
             if bids_type == "func":
+                task = "task-NoTaskSpecified"
                 if tag.get("task_regexp", None):
                     pattern = tag["task_regexp"]
                     re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
