@@ -250,6 +250,10 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
             else:
                 raise Exception('Support for DICOM field {} not implemented.'.format(dicom_field))
 
+            # No data was available for this tag
+            if dcm_dat == "":
+                continue
+
             # Verify that all the keywords in the include field are present
             match = True
             for expr in tag["include"]:
