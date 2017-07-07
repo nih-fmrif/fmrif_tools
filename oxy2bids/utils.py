@@ -251,14 +251,13 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 raise Exception('Support for DICOM field {} not implemented.'.format(dicom_field))
 
             # No data was available for this tag
-            print("current dcm_dat: {}".format(dcm_dat))
             if dcm_dat == "":
                 continue
 
             # Verify that all the keywords in the include field are present
             match = True
             for expr in tag["include"]:
-                pattern = r"(?:^|[ _]){}(?:[ _]|$)".format(expr)
+                pattern = r"(?:^|[ _-]){}(?:[ _-]|$)".format(expr)
                 re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
                 if not re_match:
                     match = False
@@ -270,7 +269,7 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
             # Verify that none of the keywords in the exclude field are present
             match = False
             for expr in tag["exclude"]:
-                pattern = r"(?:^|[ _]){}(?:[ _]|$)".format(expr)
+                pattern = r"(?:^|[ _-]){}(?:[ _-]|$)".format(expr)
                 re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
                 if re_match:
                     match = True
