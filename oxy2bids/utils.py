@@ -239,10 +239,14 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
 
             dicom_field = tag['dicom_field']
 
+            dcm_dat = ""
             if dicom_field == 'series_description':
                 dcm_dat = curr_dcm.SeriesDescription
-            elif dicom_field == 'pulse_seq_name':
-                dcm_dat = curr_dcm[0x19,0x109c].value
+            elif dicom_field == 'sequence_name':
+                if curr_dcm.get((0x19, 0x109c), None):
+                    dcm_dat = curr_dcm[0x19, 0x109c].value
+                elif curr_dcm.get((0x18, 0x24), None):
+                    dcm_dat = curr_dcm[0x18, 0x24].value
             else:
                 raise Exception('Support for DICOM field {} not implemented.'.format(dicom_field))
 
