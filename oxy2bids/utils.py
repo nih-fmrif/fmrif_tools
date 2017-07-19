@@ -14,6 +14,7 @@ import pandas as pd
 from datetime import datetime
 from glob import glob
 from collections import OrderedDict
+from subprocess import CalledProcessError, check_output, STDOUT
 
 MAX_WORKERS = multiprocessing.cpu_count() * 5
 
@@ -76,7 +77,7 @@ def create_path(path, semaphore=None):
         semaphore.release()
 
 
-def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=None, nthreads=0):
+def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=None):
 
     default_keys = pkg_resources.resource_filename("oxy2bids", "data/bids_keys.json")
 
@@ -118,27 +119,48 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
 
         log.info("Parsing file {}...".format(tgz_file))
 
+        try:
+            results = check_output('tar -tf {}'.format(tgz_file.strip()),
+                                   shell=True, universal_newlines=True, stderr=STDOUT)
+        except CalledProcessError:
+            log.error("Could not open file {}.".format(tgz_file))
+            continue
+
+        # tar = tarfile.open(tgz_file)
+        # tar_files = tar.getmembers()
+
+        for res in str(results).strip().split("\n"):
+            curr_dir = os.path.dirname(res)
+            if curr_dir not in mr_folders_checked:
+                if ".dcm" in res:
+                    dicom_files.append(res)
+                    mr_folders_checked.append(curr_dir)
+                elif ".1D" in res:
+                    realtime_files.append(res)
+
+        # for tar_file in tar_files:
+        #
+        #     tar_file_dir = "/".join(tar_file.name.split('/')[:-1])
+        #
+        #     if tar_file.name[-4:] == ".dcm" and (tar_file_dir not in mr_folders_checked):
+        #         dicom_files.append(tar_file.name)
+        #         mr_folders_checked.append(tar_file_dir)
+        #
+        #     if tar_file.name[-3:] == ".1D" and ("realtime" in tar_file.name):
+        #         realtime_files.append(tar_file.name)
+
         tar = tarfile.open(tgz_file)
-        tar_files = tar.getmembers()
-
-        for tar_file in tar_files:
-
-            tar_file_dir = "/".join(tar_file.name.split('/')[:-1])
-
-            if tar_file.name[-4:] == ".dcm" and (tar_file_dir not in mr_folders_checked):
-                dicom_files.append(tar_file.name)
-                mr_folders_checked.append(tar_file_dir)
-
-            if tar_file.name[-3:] == ".1D" and ("realtime" in tar_file.name):
-                realtime_files.append(tar_file.name)
 
         for dcm_file in dicom_files:
 
-            parse_results = parse_dicom(tar, dcm_file, realtime_files=realtime_files, bids_keys=bids_keys)
+            parse_results = parse_dicom(tar, dcm_file, realtime_files=realtime_files,
+                                        bids_keys=bids_keys, log=log)
 
             if parse_results:
                 tmp_df = pd.DataFrame.from_dict(parse_results)
                 mapping_df = pd.concat([mapping_df, tmp_df], ignore_index=True)
+            else:
+                log.warning("No tag matches on file {}.".format(dcm_file))
 
         tar.close()
 
@@ -224,7 +246,7 @@ def extract_tgz(fpath, out_path=None, log=None):
     return fpath, True
 
 
-def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
+def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None, log=None):
 
     curr_dcm = dicom.read_file(tar.extractfile(dcm_file))
 
@@ -338,6 +360,9 @@ def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None):
                 'resp_physio': [resp_physio],
                 'cardiac_physio': [cardiac_physio]
             })
+
+            if log:
+                log.info("Parsed: {} -- Tag: {} --  Dicom Field: {}".format(dcm_file, tag, dcm_dat))
 
             return curr_map
 

@@ -165,7 +165,7 @@ def main():
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
         gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
-                log=log, nthreads=settings.nthreads)
+                log=log)
         log.info(LOG_MESSAGES['gen_map_done'])
 
         # Use generated map to convert files
@@ -187,7 +187,7 @@ def main():
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
         gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
-                log=log, nthreads=settings.nthreads)
+                log=log)
         log.info(LOG_MESSAGES['gen_map_done'])
 
     # Shutdown the log
