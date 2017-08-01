@@ -113,7 +113,6 @@ class BIDSConverter(object):
     def _dcm2niix(self, bids_fpath, dcm_dir, physio):
 
         bids_dir = os.path.abspath(os.path.dirname(bids_fpath))
-        print(bids_dir)
         bids_fname = os.path.basename(bids_fpath).split(".")[0]
 
         # Create the bids output directory if it does not exist
@@ -286,8 +285,8 @@ def parse_bids_map_row(row):
     return subject, session, task, acq, rec, run, modality, oxy_file, scan_dir, resp_physio, cardiac_physio
 
 
-def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', start_datetime=None, log=None,
-                     nthreads=0, overwrite=False):
+def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', start_datetime=None,
+                     strict_python=False, log=None, nthreads=0, overwrite=False):
 
     if not start_datetime:
         start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -382,7 +381,8 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
 
         # Extract the TGZ files
         for tgz_file in tgz_files.keys():
-            extract_tgz(tgz_file, out_path=os.path.join(tmp_dir, tgz_files[tgz_file]), log=log)
+            extract_tgz(tgz_file, out_path=os.path.join(tmp_dir, tgz_files[tgz_file]), strict_python=strict_python,
+                        log=log)
 
         # Convert files to NIFTI
         converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
@@ -398,7 +398,8 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
 
             for tgz_file in tgz_files.keys():
                 futures.append(executor.submit(extract_tgz, tgz_file,
-                                               out_path=os.path.join(tmp_dir, tgz_files[tgz_file]), log=log))
+                                               out_path=os.path.join(tmp_dir, tgz_files[tgz_file]),
+                                               strict_python=strict_python, log=log))
             wait(futures)
 
             for future in futures:

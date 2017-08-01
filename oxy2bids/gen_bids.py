@@ -6,6 +6,7 @@ import argparse
 from oxy2bids.converters import process_bids_map
 from oxy2bids.utils import init_log, log_shutdown, gen_map, MAX_WORKERS
 from datetime import datetime
+from subprocess import check_output, CalledProcessError, STDOUT
 
 
 def main():
@@ -93,6 +94,14 @@ def main():
         default=False
     )
 
+    parser.add_argument(
+        "--strict_python",
+        help="This program can use some system tools (such as tar) to improve performance"
+             "Set this flag to use native python libraries exclusively.",
+        action='store_true',
+        default=False
+    )
+
     settings = parser.parse_args()
 
     if not settings.auto and not settings.gen_map and not settings.bids_map:
@@ -127,13 +136,26 @@ def main():
     else:
         log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
 
+    # Init logger
+    log = init_log(log_fpath, settings.debug)
+
     if settings.dicom_tags:
         custom_keys = os.path.abspath(settings.dicom_tags)
     else:
         custom_keys = None
 
-    # Init logger
-    log = init_log(log_fpath, settings.debug)
+    if settings.bids_map:
+        if settings.gen_map:
+            log.warning("A pre-existing BIDS mapping was provided, ignoring --gen_map flag...")
+            settings.gen_map = False
+
+    # If system util usage is allowed, verify the needed utilities are
+    # installed and in the PATH, otherwise use strict_python
+    if not settings.strict_python:
+        try:
+            check_output("which tar", shell=True, universal_newlines=True, stderr=STDOUT)
+        except CalledProcessError as e:
+            settings.strict_python = True
 
     # Print the settings
     settings_str = "DICOM directory: {}\n".format(dicom_dir) + \
@@ -146,7 +168,8 @@ def main():
                    "Conversion tool: {}\n".format(settings.conversion_tool) + \
                    "Overwrite: {}\n".format(settings.overwrite) + \
                    "Log: {}\n".format(log_fpath) + \
-                   "Number of threads: {}".format(settings.nthreads)
+                   "Number of threads: {}\n".format(settings.nthreads) +\
+                   "Strict Python Mode: {}".format(settings.strict_python)
 
     # Main log messages
     LOG_MESSAGES = {
@@ -165,13 +188,14 @@ def main():
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
         gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
-                log=log)
+                strict_python=settings.strict_python, log=log)
         log.info(LOG_MESSAGES['gen_map_done'])
 
         # Use generated map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
         process_bids_map(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, conversion_tool='dcm2niix', log=log,
-                         start_datetime=start_datetime, nthreads=settings.nthreads)
+                         start_datetime=start_datetime, nthreads=settings.nthreads,
+                         strict_python=settings.strict_python)
         log.info(LOG_MESSAGES['shutdown'])
 
     elif settings.bids_map:
@@ -179,7 +203,8 @@ def main():
         # Use provided map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
         process_bids_map(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, conversion_tool='dcm2niix', log=log,
-                         start_datetime=start_datetime, nthreads=settings.nthreads)
+                         start_datetime=start_datetime, nthreads=settings.nthreads,
+                         strict_python=settings.strict_python)
         log.info(LOG_MESSAGES['shutdown'])
 
     elif settings.gen_map:
@@ -187,7 +212,7 @@ def main():
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
         gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
-                log=log)
+                strict_python=settings.strict_python, log=log)
         log.info(LOG_MESSAGES['gen_map_done'])
 
     # Shutdown the log
