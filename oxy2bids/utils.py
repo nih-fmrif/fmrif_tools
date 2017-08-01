@@ -102,69 +102,64 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
 
     log.info("BIDS key file parsed!")
 
-    tgz_files = glob(os.path.join(dcm_dir, "*.tgz"))
-
     mapping_df = pd.DataFrame(columns=['subject', 'session', 'bids_type', 'task',
                                        'acq', 'rec', 'run', 'modality',
                                        'patient_id', 'scan_datetime', 'oxy_file',
                                        'scan_dir', 'resp_physio', 'cardiac_physio'])
 
-    log.info("Parsing DICOM files...")
+    log.info("Searching for Compressed Oxygen files in {}".format(dcm_dir))
 
-    for tgz_file in tgz_files:
+    tgz_files = glob(os.path.join(dcm_dir, "*.tgz"))
 
-        mr_folders_checked = []
-        dicom_files = []
-        realtime_files = []
+    if tgz_files:
 
-        log.info("Parsing file {}...".format(tgz_file))
+        log.info("Found {} compressed files".format(len(tgz_files)))
 
-        try:
-            results = check_output('tar -tf {}'.format(tgz_file.strip()),
-                                   shell=True, universal_newlines=True, stderr=STDOUT)
-        except CalledProcessError:
-            log.error("Could not open file {}.".format(tgz_file))
-            continue
+        log.info("Parsing Compressed Oxygen files...")
 
-        # tar = tarfile.open(tgz_file)
-        # tar_files = tar.getmembers()
+        for tgz_file in tgz_files:
 
-        for res in str(results).strip().split("\n"):
-            curr_dir = os.path.dirname(res)
-            if curr_dir not in mr_folders_checked:
-                if ".dcm" in res:
-                    dicom_files.append(res)
-                    mr_folders_checked.append(curr_dir)
-                elif ".1D" in res:
-                    realtime_files.append(res)
+            mr_folders_checked = []
+            dicom_files = []
+            realtime_files = []
 
-        # for tar_file in tar_files:
-        #
-        #     tar_file_dir = "/".join(tar_file.name.split('/')[:-1])
-        #
-        #     if tar_file.name[-4:] == ".dcm" and (tar_file_dir not in mr_folders_checked):
-        #         dicom_files.append(tar_file.name)
-        #         mr_folders_checked.append(tar_file_dir)
-        #
-        #     if tar_file.name[-3:] == ".1D" and ("realtime" in tar_file.name):
-        #         realtime_files.append(tar_file.name)
+            log.info("Parsing file {}...".format(tgz_file))
 
-        tar = tarfile.open(tgz_file)
+            try:
+                results = check_output('tar -tf {}'.format(tgz_file.strip()),
+                                       shell=True, universal_newlines=True, stderr=STDOUT)
+            except CalledProcessError:
+                log.error("Could not open file {}.".format(tgz_file))
+                continue
 
-        for dcm_file in dicom_files:
+            for res in str(results).strip().split("\n"):
+                curr_dir = os.path.dirname(res)
+                if curr_dir not in mr_folders_checked:
+                    if ".dcm" in res:
+                        dicom_files.append(res)
+                        mr_folders_checked.append(curr_dir)
+                    elif ".1D" in res:
+                        realtime_files.append(res)
 
-            parse_results = parse_dicom(tar, dcm_file, realtime_files=realtime_files,
-                                        bids_keys=bids_keys, log=log)
+            tar = tarfile.open(tgz_file)
 
-            if parse_results:
-                tmp_df = pd.DataFrame.from_dict(parse_results)
-                mapping_df = pd.concat([mapping_df, tmp_df], ignore_index=True)
-            else:
-                log.warning("No tag matches on file {}.".format(dcm_file))
+            for dcm_file in dicom_files:
 
-        tar.close()
+                parse_results = parse_dicom(tar, dcm_file, realtime_files=realtime_files,
+                                            bids_keys=bids_keys, log=log)
 
-        log.info("Finished parsing {}!".format(tgz_file))
+                if parse_results:
+                    tmp_df = pd.DataFrame.from_dict(parse_results)
+                    mapping_df = pd.concat([mapping_df, tmp_df], ignore_index=True)
+                else:
+                    log.warning("No tag matches on file {}.".format(dcm_file))
+
+            tar.close()
+
+            log.info("Finished parsing {}!".format(tgz_file))
+
+    else:
+        log.info("No compresssed Oxygen files found.")
 
     # Set the BIDS subjects based on unique patient id
     unique_ids = mapping_df['patient_id'].unique()
