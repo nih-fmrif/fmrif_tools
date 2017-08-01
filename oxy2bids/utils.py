@@ -2,6 +2,7 @@ from __future__ import print_function, unicode_literals
 
 import os
 import re
+import io
 import errno
 import tarfile
 import multiprocessing
@@ -77,7 +78,8 @@ def create_path(path, semaphore=None):
         semaphore.release()
 
 
-def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=None):
+def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, strict_python=False,
+            log=None):
 
     default_keys = pkg_resources.resource_filename("oxy2bids", "data/bids_keys.json")
 
@@ -141,20 +143,16 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
                     elif ".1D" in res:
                         realtime_files.append(res)
 
-            tar = tarfile.open(tgz_file)
-
             for dcm_file in dicom_files:
 
-                parse_results = parse_dicom(tar, dcm_file, realtime_files=realtime_files,
-                                            bids_keys=bids_keys, log=log)
+                parse_results = parse_dicom(tgz_file, dcm_file, realtime_files=realtime_files,
+                                            bids_keys=bids_keys, strict_python=strict_python, log=log)
 
                 if parse_results:
                     tmp_df = pd.DataFrame.from_dict(parse_results)
                     mapping_df = pd.concat([mapping_df, tmp_df], ignore_index=True)
                 else:
                     log.warning("No tag matches on file {}.".format(dcm_file))
-
-            tar.close()
 
             log.info("Finished parsing {}!".format(tgz_file))
 
@@ -217,12 +215,11 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, log=
                                'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio', 'cardiac_physio'])
 
 
-def extract_tgz(fpath, out_path=None, log=None):
+def extract_tgz(fpath, out_path=None, strict_python=False, log=None):
 
     if not tarfile.is_tarfile(fpath):
         return fpath, False
 
-    tar = tarfile.open(fpath, "r:gz")
     fname = fpath.split("/")[-1].split("-")
     scans_folder = os.path.join("{}-{}".format(fname[0], fname[1]), "{}-{}".format(fname[2], fname[3]))
 
@@ -232,8 +229,18 @@ def extract_tgz(fpath, out_path=None, log=None):
     else:
         extracted_dir = "{}".format(os.path.join(out_path, scans_folder))
 
-    tar.extractall(path=out_path)
-    tar.close()
+    if not strict_python:
+        try:
+            check_output("mkdir -p {} && tar -xf {} -C {}".format(out_path, fpath, out_path), shell=True,
+                         universal_newlines=True, stderr=STDOUT)
+        except CalledProcessError as e:
+            log.warning("Error extracting {}".format(fpath))
+            log.warning("{}".format(e))
+            return fpath, False
+    else:
+        tar = tarfile.open(fpath, "r:gz")
+        tar.extractall(path=out_path)
+        tar.close()
 
     if log:
         log.info("Extracted file {} to {} directory.".format(fpath, extracted_dir))
@@ -241,9 +248,27 @@ def extract_tgz(fpath, out_path=None, log=None):
     return fpath, True
 
 
-def parse_dicom(tar, dcm_file, bids_keys, realtime_files=None, log=None):
+def parse_dicom(tgz_file, dcm_file, bids_keys, realtime_files=None, strict_python=False,
+                log=None):
 
-    curr_dcm = dicom.read_file(tar.extractfile(dcm_file))
+    if not strict_python:
+
+        try:
+            oxy_bytes = check_output('tar -O -xf {} {}'.format(tgz_file, dcm_file),
+                                     shell=True, stderr=STDOUT)
+        except CalledProcessError as e:
+            log.warning("Unable to extract {} from {}".format(dcm_file, tgz_file))
+            return
+
+        oxy_fobj = io.BytesIO(oxy_bytes)
+
+        curr_dcm = dicom.read_file(oxy_fobj)
+
+    else:
+
+        tar = tarfile.open(tgz_file)
+        curr_dcm = dicom.read_file(tar.extractfile(dcm_file))
+        tar.close()
 
     for bids_type in bids_keys.keys():
 
