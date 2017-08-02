@@ -40,7 +40,10 @@ def main():
         install_requires=REQUIRES,
         url=__url__,
         download_url=__download__,
-        entry_points={'console_scripts': ['oxy2bids=oxy2bids.gen_bids:main']},
+        entry_points={'console_scripts': [
+            'oxy2bids=oxy2bids.gen_bids:main',
+            'process_biopac=biounpacker.biopac_organize:main'
+        ]},
         packages=find_packages(),
         package_data=pkg_data,
         zip_safe=False,
