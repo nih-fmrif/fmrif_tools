@@ -105,6 +105,9 @@ def main():
         plt.savefig("{}_plots.pdf".format(settings.output_prefix))
         plt.close()
 
+    if not os.path.dirname(output_prefix):
+        output_prefix = os.path.join(os.getcwd(), output_prefix)
+
     output_dir = os.path.dirname(output_prefix)
 
     # Check whether the files that will be created already exist,

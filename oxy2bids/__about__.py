@@ -5,7 +5,7 @@ FMRIF TOOLS
 
 from datetime import date
 
-__version__ = '0.1a3'
+__version__ = '0.1a4'
 __author__ = 'Jan Varada'
 __email__ = 'jan.varada@nih.gov'
 __maintainer__ = 'Jan Varada'
@@ -45,7 +45,7 @@ REQUIRES = [
     'networkx==1.11',
     'nibabel==2.1.0',
     'nipype==0.13.1',
-    'numpy==1.11.2',
+    'numpy==1.13.0',
     'pandas==0.20.1',
     'prov==1.5.0',
     'pydicom==0.9.9',
