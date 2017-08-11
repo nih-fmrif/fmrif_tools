@@ -30,7 +30,7 @@ def get_sample_dicoms(tgz_file, log=None):
     return tgz_file, scans_list
 
 
-def extract_dicom_metadata(tgz_file, dcm_file, dicom_tags, log=None):
+def extract_compressed_dicom_metadata(tgz_file, dcm_file, dicom_tags, log=None):
 
     metadata = OrderedDict()
     metadata["dicom_file"] = dcm_file
@@ -46,6 +46,38 @@ def extract_dicom_metadata(tgz_file, dcm_file, dicom_tags, log=None):
     dcm_fobj = io.BytesIO(dcm_bytes)
 
     curr_dcm = dicom.read_file(dcm_fobj, stop_before_pixels=True)
+
+    for tag in dicom_tags.keys():
+        curr_val = dicom_tags[tag]
+        if type(curr_val) == str:
+            dcm_group, dcm_element = curr_val.split(",")
+            dcm_group = int(dcm_group.strip(), 16)
+            dcm_element = int(dcm_element.strip(), 16)
+            dcm_dat = curr_dcm.get((dcm_group, dcm_element), None)
+            metadata[tag] = dcm_dat.value if dcm_dat else ""
+        elif type(curr_val) == list:
+            metadata[tag] = ""
+            for val in curr_val:
+                dcm_group, dcm_element = val.split(",")
+                dcm_group = int(dcm_group.strip(), 16)
+                dcm_element = int(dcm_element.strip(), 16)
+                dcm_dat = curr_dcm.get((dcm_group, dcm_element), None)
+                if dcm_dat:
+                    metadata[tag] = dcm_dat.value
+                    break
+        else:
+            log.error("Unknown Dicom tag format: {}".format(curr_val))
+            raise Exception("Unknown Dicom tag format: {}".format(curr_val))
+
+    return metadata
+
+
+def extract_uncompressed_dicom_metadata(dcm_file, dicom_tags, log=None):
+
+    metadata = OrderedDict()
+    metadata["dicom_file"] = "/".join(dcm_file.split("/")[-4:])
+
+    curr_dcm = dicom.read_file(dcm_file, stop_before_pixels=True)
 
     for tag in dicom_tags.keys():
         curr_val = dicom_tags[tag]
