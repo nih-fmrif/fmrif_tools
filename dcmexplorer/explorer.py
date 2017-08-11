@@ -12,6 +12,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, wait
 from itertools import repeat
 from dcmexplorer.utils import get_sample_dicoms, extract_dicom_metadata
+from collections import OrderedDict
 
 
 def explore_dicoms(dicom_dir, dicom_tags, nthreads=None, log=None):
@@ -70,7 +71,7 @@ def explore_dicoms(dicom_dir, dicom_tags, nthreads=None, log=None):
         if not future.exception():
             metadata_list.append(future.result())
 
-    metadata = pd.DataFrame(metadata_list)
+    metadata = pd.DataFrame(metadata_list, columns=metadata_list[0].keys())
 
     if created_log:
         log_shutdown(log)
@@ -129,13 +130,13 @@ def main():
         log.info("Parsing user-specified Dicom tags...")
         tag_fpath = os.path.abspath(settings.dicom_tags)
         with open(tag_fpath, 'r') as tags:
-            dicom_tags = json.load(tags)
+            dicom_tags = json.load(tags, object_pairs_hook=OrderedDict)
         log.info("Successfully parsed Dicom tags!")
     else:
         log.info("Loading default Dicom tags...")
         default_tags = pkg_resources.resource_filename("dcmexplorer", "data/dicom_tags.json")
         with open(default_tags, 'r') as tags:
-            dicom_tags = json.load(tags)
+            dicom_tags = json.load(tags, object_pairs_hook=OrderedDict)
         log.info("Successfully loaded default Dicom tags!")
 
     metadata = explore_dicoms(dicom_dir, dicom_tags=dicom_tags, nthreads=settings.nthreads, log=log)
