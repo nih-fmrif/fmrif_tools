@@ -22,7 +22,10 @@ def main():
         REQUIRES,
     )
 
-    pkg_data = {'oxy2bids': ['data/bids_keys.json']}
+    pkg_data = {
+        'oxy2bids': ['data/bids_keys.json'],
+        'dcmexplorer': ['data/dicom_tags.json']
+    }
 
     version = __version__
 
@@ -40,7 +43,13 @@ def main():
         install_requires=REQUIRES,
         url=__url__,
         download_url=__download__,
-        entry_points={'console_scripts': ['oxy2bids=oxy2bids.gen_bids:main']},
+        entry_points={
+            'console_scripts': [
+                'oxy2bids=oxy2bids.gen_bids:main',
+                'process_biopac=biounpacker.biopac_organize:main',
+                'dcmexplorer=dcmexplorer.explorer:main'
+            ]
+        },
         packages=find_packages(),
         package_data=pkg_data,
         zip_safe=False,

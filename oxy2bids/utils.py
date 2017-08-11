@@ -22,9 +22,12 @@ MAX_WORKERS = multiprocessing.cpu_count() * 5
 date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
-def init_log(log_fpath=None, debug=False):
+def init_log(log_fpath=None, log_name=None, debug=False):
 
-    log = logging.getLogger('oxy2bids')
+    if log_name:
+        log = logging.getLogger(log_name)
+    else:
+        log = logging.getLogger('oxy2bids')
 
     if debug:
         log.setLevel(logging.DEBUG)
@@ -157,7 +160,7 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, stri
             log.info("Finished parsing {}!".format(tgz_file))
 
     else:
-        log.info("No compresssed Oxygen files found.")
+        log.info("No compressed Oxygen files found.")
 
     # Set the BIDS subjects based on unique patient id
     unique_ids = mapping_df['patient_id'].unique()
@@ -262,12 +265,12 @@ def parse_dicom(tgz_file, dcm_file, bids_keys, realtime_files=None, strict_pytho
 
         oxy_fobj = io.BytesIO(oxy_bytes)
 
-        curr_dcm = dicom.read_file(oxy_fobj)
+        curr_dcm = dicom.read_file(oxy_fobj, stop_before_pixels=True)
 
     else:
 
         tar = tarfile.open(tgz_file)
-        curr_dcm = dicom.read_file(tar.extractfile(dcm_file))
+        curr_dcm = dicom.read_file(tar.extractfile(dcm_file), stop_before_pixels=True)
         tar.close()
 
     for bids_type in bids_keys.keys():
