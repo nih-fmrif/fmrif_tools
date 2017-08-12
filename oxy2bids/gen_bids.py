@@ -53,15 +53,6 @@ def main():
     )
 
     parser.add_argument(
-        "--ignore_default_tags",
-        help="Ignore the default BIDS tags if custom tags if custom tags are "
-             "provided with the --dicom_tags flags. Otherwise the custom tags "
-             "are considered on top of the default ones.",
-        action='store_true',
-        default=False
-    )
-
-    parser.add_argument(
         "--conversion_tool",
         help="Tool to convert DICOM scans to NIFTI files. Options: dcm2niix (default), dimon.",
         default='dcm2niix'
@@ -139,10 +130,7 @@ def main():
     # Init logger
     log = init_log(log_fpath, settings.debug)
 
-    if settings.dicom_tags:
-        custom_keys = os.path.abspath(settings.dicom_tags)
-    else:
-        custom_keys = None
+    custom_keys = os.path.abspath(settings.dicom_tags) if settings.dicom_tags else None
 
     if settings.bids_map:
         if settings.gen_map:
@@ -164,7 +152,6 @@ def main():
                    "BIDS map: {}\n".format(bids_map) + \
                    "Automatic analysis: {}\n".format(settings.auto) +\
                    "DICOM tags file: {}\n".format("default" if not custom_keys else custom_keys) +\
-                   "Ignore default DICOM tags: {}\n".format(settings.ignore_default_tags) +\
                    "Conversion tool: {}\n".format(settings.conversion_tool) + \
                    "Overwrite: {}\n".format(settings.overwrite) + \
                    "Log: {}\n".format(log_fpath) + \
@@ -187,8 +174,12 @@ def main():
 
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
-        gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
-                strict_python=settings.strict_python, log=log)
+        mapping = gen_map(dicom_dir, custom_keys=custom_keys, strict_python=settings.strict_python, log=log)
+        # Save map to csv
+        mapping.to_csv(path_or_buf=bids_map, index=False, header=True,
+                       columns=['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality',
+                                'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio',
+                                'cardiac_physio'])
         log.info(LOG_MESSAGES['gen_map_done'])
 
         # Use generated map to convert files
@@ -211,8 +202,12 @@ def main():
 
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
-        gen_map(dicom_dir, bids_map=bids_map, custom_keys=custom_keys, ignore_default_tags=settings.ignore_default_tags,
-                strict_python=settings.strict_python, log=log)
+        mapping = gen_map(dicom_dir, custom_keys=custom_keys, strict_python=settings.strict_python, log=log)
+        # Save map to csv
+        mapping.to_csv(path_or_buf=bids_map, index=False, header=True,
+                       columns=['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality',
+                                'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio',
+                                'cardiac_physio'])
         log.info(LOG_MESSAGES['gen_map_done'])
 
     # Shutdown the log

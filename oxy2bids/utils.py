@@ -14,26 +14,15 @@ from collections import OrderedDict
 from subprocess import CalledProcessError, check_output, STDOUT
 
 
-def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, strict_python=False,
-            log=None):
+def gen_map(dcm_dir, custom_keys=None, strict_python=False, log=None):
 
     default_keys = pkg_resources.resource_filename("oxy2bids", "data/bids_keys.json")
 
     log.info("Parsing BIDS key file...")
 
     if custom_keys:
-        if ignore_default_tags:
-            with open(custom_keys) as ckeys:
-                bids_keys = json.load(ckeys)
-        else:
-            with open(default_keys) as dkeys:
-                bids_keys = json.load(dkeys)
-            with open(custom_keys) as ckeys:
-                cust_keys = json.load(ckeys)
-
-            for scan_type in bids_keys.keys():
-                if cust_keys.get('scan_type', None):
-                    bids_keys[scan_type].extend(cust_keys[scan_type])
+        with open(custom_keys) as ckeys:
+            bids_keys = json.load(ckeys)
     else:
         with open(default_keys) as dkeys:
             bids_keys = json.load(dkeys)
@@ -146,9 +135,8 @@ def gen_map(dcm_dir, bids_map, custom_keys=None, ignore_default_tags=False, stri
                         curr_run += 1
     mapping_df.sort_values(['subject', 'session', 'task', 'modality', 'run'],
                            ascending=['True', 'True', 'True', 'True', 'True'], inplace=True)
-    mapping_df.to_csv(path_or_buf=bids_map, index=False, header=True,
-                      columns=['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality',
-                               'patient_id', 'scan_datetime', 'oxy_file', 'scan_dir', 'resp_physio', 'cardiac_physio'])
+
+    return mapping_df
 
 
 def extract_tgz(fpath, out_path=None, strict_python=False, log=None):
