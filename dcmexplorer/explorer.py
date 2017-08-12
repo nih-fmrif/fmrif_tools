@@ -6,9 +6,8 @@ import json
 import pkg_resources
 import pandas as pd
 
+from ..utils import init_log, log_shutdown, get_cpu_count, get_datetime
 from glob import glob
-from oxy2bids.utils import init_log, log_shutdown, MAX_WORKERS
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, wait
 from itertools import repeat
 from dcmexplorer.utils import get_sample_dicoms, extract_compressed_dicom_metadata, \
@@ -20,12 +19,8 @@ def explore_dicoms(dicom_dir, dicom_tags, nthreads=None, log=None):
 
     created_log = False
 
-    if not nthreads:
-        nthreads = MAX_WORKERS
-
     if not log:
-        date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log = init_log(os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(date)))
+        log = init_log(os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(get_datetime())))
         created_log = True
 
     metadata_list = []
@@ -143,7 +138,7 @@ def main():
     parser.add_argument(
         "--nthreads",
         help="number of threads to use when running this script. Use 0 for sequential run.",
-        default=MAX_WORKERS,
+        default=get_cpu_count(),
         type=int
     )
 
@@ -155,8 +150,7 @@ def main():
     if settings.log:
         log_fpath = os.path.abspath(settings.log)
     else:
-        date = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-        log_fpath = os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(date))
+        log_fpath = os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(get_datetime()))
 
     log = init_log(log_fpath, 'dcmexplorer')
 

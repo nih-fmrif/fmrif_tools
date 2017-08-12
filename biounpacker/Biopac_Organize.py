@@ -14,8 +14,8 @@ import os
 import bioread
 import matplotlib.pyplot as plt
 
+from ..utils import init_log, log_shutdown
 from datetime import datetime
-from oxy2bids.utils import init_log, log_shutdown
 
 
 def main():

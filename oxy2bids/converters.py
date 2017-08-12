@@ -8,11 +8,11 @@ import random
 import string
 import json
 
+from ..utils import create_path, init_log, get_datetime
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
-from oxy2bids.utils import create_path, extract_tgz, init_log
-from datetime import datetime
+from oxy2bids.utils import extract_tgz
 from collections import OrderedDict
 
 
@@ -32,8 +32,6 @@ LOG_MESSAGES = {
         'Command:\n{}\n'
         'Return Code:\n{}\n\n',
 }
-
-DATE_STR = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
 class NiftyConversionFailure(Exception):
@@ -185,88 +183,6 @@ class BIDSConverter(object):
             if tmp_files:
                 list(map(os.remove, tmp_files))
 
-    # def _dimon(self, bids_fpath, dcm_fpath):
-    #     pass
-    #
-    #     dcm_dir = os.path.dirname(dcm_fpath)
-    #
-    #     bids_dir = os.path.dirname(bids_fpath)
-    #     bids_fname = os.path.basename(bids_fpath).split(".")[0]
-    #
-    #     # Create the bids output directory if it does not exist
-    #     if not os.path.isdir(os.path.dirname(bids_dir)):
-    #         create_path(os.path.dirname(bids_dir))
-    #
-    #     workdir = dcm_dir
-    #
-    #     # IMPLEMENT GENERATION OF BIDS METADATA FILES WHEN USING DIMON FOR CONVERSION OF DCM FILES
-    #
-    #     cmd = [
-    #         "Dimon",
-    #         "-infile_pattern",
-    #         os.path.join(workdir, "*.dcm"),
-    #         "-gert_create_dataset",
-    #         "-gert_quit_on_err",
-    #         "-gert_to3d_prefix",
-    #         "{}.nii.gz".format(bids_fname)
-    #     ]
-    #
-    #     dimon_env = os.environ.copy()
-    #     dimon_env['AFNI_TO3D_OUTLIERS'] = 'No'
-    #
-    #     try:
-    #
-    #         result = check_output(cmd, stderr=STDOUT, env=dimon_env, cwd=workdir, universal_newlines=True)
-    #
-    #         # Check the contents of stdout for the -quit_on_err flag because to3d returns a success code
-    #         # even if it terminates because the -quit_on_err flag was thrown
-    #         if "to3d kept from going into interactive mode by option -quit_on_err" in result:
-    #
-    #             log_str = LOG_MESSAGES['dimon_error'].format(dcm_fpath, " ".join(cmd), 0)
-    #
-    #             if result:
-    #                 log_str += LOG_MESSAGES['output'].format(result)
-    #
-    #             self.log.info(log_str)
-    #
-    #             return dcm_fpath, False
-    #
-    #         shutil.move(os.path.join(workdir, "{}.nii.gz".format(out_fpath)),
-    #                     os.path.join(os.path.dirname(bids_fpath), "{}.nii.gz".format(out_fname)))
-    #
-    #         dcm_file = [f for f in os.listdir(dcm_dir) if ".dcm" in f][0]
-    #
-    #         log_str = LOG_MESSAGES['success_converted'].format(os.path.join(dcm_dir, dcm_file), out_fname,
-    #                                                            " ".join(cmd), 0)
-    #
-    #         if result:
-    #             log_str += LOG_MESSAGES['output'].format(result)
-    #
-    #         log_output(log_str, logger=logger, semaphore=semaphore)
-    #
-    #         return dcm_dir, True
-    #
-    #     except CalledProcessError as e:
-    #
-    #         log_str = LOG_MESSAGES['dimon_error'].format(dcm_dir, " ".join(cmd), e.returncode)
-    #
-    #         if e.output:
-    #             log_str += LOG_MESSAGES['output'].format(e.output)
-    #
-    #         log_output(log_str, level="ERROR", logger=logger, semaphore=semaphore)
-    #
-    #         return dcm_dir, False
-    #
-    #     finally:
-    #
-    #         # Clean up temporary files
-    #         tmp_files = glob(os.path.join(dimon_workdir, "GERT_Reco_dicom*"))
-    #         tmp_files.extend(glob(os.path.join(dimon_workdir, "dimon.files.run.*")))
-    #
-    #         if tmp_files:
-    #             list(map(os.remove, tmp_files))
-    #
-
 
 def parse_bids_map_row(row):
 
@@ -289,7 +205,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
                      strict_python=False, log=None, nthreads=0, overwrite=False):
 
     if not start_datetime:
-        start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        start_datetime = get_datetime()
 
     tmp_dir = os.path.join(os.getcwd(), "tmp-{}".format(start_datetime))
 
@@ -303,7 +219,7 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
     for idx, row in mapping.iterrows():
 
         subject, session, task, acq, rec, run, modality, oxy_file, \
-        scan_dir, resp_physio, cardiac_physio = parse_bids_map_row(row)
+                 scan_dir, resp_physio, cardiac_physio = parse_bids_map_row(row)
 
         bids_name = subject
 

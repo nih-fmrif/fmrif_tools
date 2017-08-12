@@ -3,9 +3,9 @@ from __future__ import print_function, unicode_literals
 import os
 import argparse
 
+from ..utils import init_log, log_shutdown, get_cpu_count, get_datetime
 from oxy2bids.converters import process_bids_map
-from oxy2bids.utils import init_log, log_shutdown, gen_map, MAX_WORKERS
-from datetime import datetime
+from oxy2bids.utils import gen_map
 from subprocess import check_output, CalledProcessError, STDOUT
 
 
@@ -83,7 +83,7 @@ def main():
     parser.add_argument(
         "--nthreads",
         help="number of threads to use when running this script. Use 0 for sequential run.",
-        default=MAX_WORKERS,
+        default=get_cpu_count(),
         type=int
     )
 
@@ -116,7 +116,7 @@ def main():
         parser.error("If the --ignore_default_tags is set to True, you must provide a "
                      "custom tags file via the --dicom_tags flag.")
 
-    start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    start_datetime = get_datetime()
 
     # Init default files/directories and/or normalized user provided filepaths/directories
     dicom_dir = os.path.abspath(settings.dicom_dir)
