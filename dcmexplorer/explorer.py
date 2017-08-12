@@ -6,7 +6,7 @@ import json
 import pkg_resources
 import pandas as pd
 
-from ..utils import init_log, log_shutdown, get_cpu_count, get_datetime
+from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime, validate_dicom_tags
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
 from itertools import repeat
@@ -161,12 +161,16 @@ def main():
         tag_fpath = os.path.abspath(settings.dicom_tags)
         with open(tag_fpath, 'r') as tags:
             dicom_tags = json.load(tags, object_pairs_hook=OrderedDict)
+        log.info("Validating Dicom tags...")
+        validate_dicom_tags(dicom_tags, log=log)
         log.info("Successfully parsed Dicom tags!")
     else:
         log.info("Loading default Dicom tags...")
         default_tags = pkg_resources.resource_filename("dcmexplorer", "data/dicom_tags.json")
         with open(default_tags, 'r') as tags:
             dicom_tags = json.load(tags, object_pairs_hook=OrderedDict)
+        log.info("Validating default Dicom tags...")
+        validate_dicom_tags(dicom_tags, log=log)
         log.info("Successfully loaded default Dicom tags!")
 
     metadata = explore_dicoms(dicom_dir, dicom_tags=dicom_tags, nthreads=settings.nthreads, log=log)

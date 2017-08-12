@@ -8,7 +8,7 @@ import random
 import string
 import json
 
-from ..utils import create_path, init_log, get_datetime
+from common_utils.utils import create_path, init_log, get_datetime
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait

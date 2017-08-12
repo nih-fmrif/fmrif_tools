@@ -3,7 +3,7 @@ from __future__ import print_function, unicode_literals
 import os
 import argparse
 
-from ..utils import init_log, log_shutdown, get_cpu_count, get_datetime
+from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime
 from oxy2bids.converters import process_bids_map
 from oxy2bids.utils import gen_map
 from subprocess import check_output, CalledProcessError, STDOUT

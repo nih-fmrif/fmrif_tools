@@ -14,7 +14,7 @@ import os
 import bioread
 import matplotlib.pyplot as plt
 
-from ..utils import init_log, log_shutdown
+from common_utils.utils import init_log, log_shutdown
 from datetime import datetime
 
 
