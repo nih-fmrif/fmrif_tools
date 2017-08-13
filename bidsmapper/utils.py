@@ -229,7 +229,8 @@ def get_unique_dicoms_from_compressed(compressed_file, dicom_dir, log=None):
 
         dicom_scan = DicomScan(scan_path=dicom_file, dicom_dir=dicom_dir, compressed=True)
 
-        scan_name = "scan_{}".format(dicom_scan.get_scan_dir().split("/")[-2].split("_")[-1])
+        scan_folder = dicom_scan.get_scan_dir().split("/")[-1].split("_")[-1]
+        scan_name = "scan_{}".format(scan_folder)
 
         for rt_file in realtime_files:
 
