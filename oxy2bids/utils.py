@@ -3,196 +3,27 @@ from __future__ import print_function, unicode_literals
 import os
 import re
 import io
-import tarfile
 import dicom
-import json
-import pkg_resources
-import pandas as pd
 
-from glob import glob
 from collections import OrderedDict
 from subprocess import CalledProcessError, check_output, STDOUT
 
 
-def gen_map(dcm_dir, custom_keys=None, strict_python=False, log=None):
+def parse_dicom(tgz_file, dcm_file, bids_keys, realtime_files=None, log=None):
 
-    default_keys = pkg_resources.resource_filename("oxy2bids", "data/bids_keys.json")
+    try:
 
-    log.info("Parsing BIDS key file...")
+        oxy_bytes = check_output('tar -O -xf {} {}'.format(tgz_file, dcm_file),
+                                 shell=True, stderr=STDOUT)
 
-    if custom_keys:
-        with open(custom_keys) as ckeys:
-            bids_keys = json.load(ckeys)
-    else:
-        with open(default_keys) as dkeys:
-            bids_keys = json.load(dkeys)
+    except CalledProcessError:
 
-    log.info("BIDS key file parsed!")
+        log.error("Unable to extract {} from {}".format(dcm_file, tgz_file))
+        raise Exception("An error has occurred. Check log for details.")
 
-    mapping_df = pd.DataFrame(columns=['subject', 'session', 'bids_type', 'task',
-                                       'acq', 'rec', 'run', 'modality',
-                                       'patient_id', 'scan_datetime', 'oxy_file',
-                                       'scan_dir', 'resp_physio', 'cardiac_physio'])
+    oxy_fobj = io.BytesIO(oxy_bytes)
 
-    log.info("Searching for Compressed Oxygen files in {}".format(dcm_dir))
-
-    tgz_files = glob(os.path.join(dcm_dir, "*.tgz"))
-
-    if tgz_files:
-
-        log.info("Found {} compressed files".format(len(tgz_files)))
-
-        log.info("Parsing Compressed Oxygen files...")
-
-        for tgz_file in tgz_files:
-
-            mr_folders_checked = []
-            dicom_files = []
-            realtime_files = []
-
-            log.info("Parsing file {}...".format(tgz_file))
-
-            try:
-                results = check_output('tar -tf {}'.format(tgz_file.strip()),
-                                       shell=True, universal_newlines=True, stderr=STDOUT)
-            except CalledProcessError:
-                log.error("Could not open file {}.".format(tgz_file))
-                continue
-
-            for res in str(results).strip().split("\n"):
-                curr_dir = os.path.dirname(res)
-                if curr_dir not in mr_folders_checked:
-                    if ".dcm" in res:
-                        dicom_files.append(res)
-                        mr_folders_checked.append(curr_dir)
-                    elif ".1D" in res:
-                        realtime_files.append(res)
-
-            for dcm_file in dicom_files:
-
-                parse_results = parse_dicom(tgz_file, dcm_file, realtime_files=realtime_files,
-                                            bids_keys=bids_keys, strict_python=strict_python, log=log)
-
-                if parse_results:
-                    tmp_df = pd.DataFrame.from_dict(parse_results)
-                    mapping_df = pd.concat([mapping_df, tmp_df], ignore_index=True)
-                else:
-                    log.warning("No tag matches on file {}.".format(dcm_file))
-
-            log.info("Finished parsing {}!".format(tgz_file))
-
-    else:
-        log.info("No compressed Oxygen files found.")
-
-    # Set the BIDS subjects based on unique patient id
-    unique_ids = mapping_df['patient_id'].unique()
-    subject_padding = len(str(len(unique_ids))) + 1
-    curr_subject = 1
-
-    for curr_id in unique_ids:
-        mapping_df.ix[mapping_df['patient_id'] == curr_id, 'subject'] = 'sub-{}'.format(
-                                                                                    str(curr_subject).rjust(
-                                                                                        subject_padding, '0'))
-        curr_subject += 1
-
-        # Set the BIDS sessions based on datetime stamps of current subject
-        unique_datetime = mapping_df[mapping_df['patient_id'] == curr_id]['scan_datetime'].unique()
-        session_padding = len(str(len(unique_datetime))) + 1
-        curr_session = 1
-
-        for curr_datetime in unique_datetime:
-            mapping_df.ix[(mapping_df['patient_id'] == curr_id) & (mapping_df['scan_datetime'] == curr_datetime),
-                          'session'] = 'ses-{}'.format(str(curr_session).rjust(session_padding, '0'))
-            curr_session += 1
-
-            # Set the runs based on unique combinations of task/acq/rec/modality fields
-            filtered_df = mapping_df.ix[(mapping_df['patient_id'] == curr_id) & (mapping_df['scan_datetime'] ==
-                                                                                 curr_datetime)]
-            unique_params = []
-            for idx, row in filtered_df.iterrows():
-                curr_params = {
-                    'task': row['task'],
-                    'acq': row['acq'],
-                    'rec': row['rec'],
-                    'modality': row['modality'],
-                }
-                if curr_params not in unique_params:
-                    unique_params.append(curr_params)
-
-            for params in unique_params:
-                run_df = filtered_df.ix[(filtered_df['task'] == params['task']) &
-                                        (filtered_df['acq'] == params['acq']) &
-                                        (filtered_df['rec'] == params['rec']) &
-                                        (filtered_df['modality'] == params['modality'])]
-                run_padding = len(str(len(run_df))) + 1
-                curr_run = 1
-                for idx, row in mapping_df.iterrows():
-                    if row['patient_id'] == curr_id and row['scan_datetime'] == curr_datetime and \
-                       row['task'] == params['task'] and row['acq'] == params['acq'] and \
-                       row['rec'] == params['rec'] and row['modality'] == params['modality']:
-
-                        row['run'] = "run-{}".format(str(curr_run).rjust(run_padding, '0'))
-                        curr_run += 1
-    mapping_df.sort_values(['subject', 'session', 'task', 'modality', 'run'],
-                           ascending=['True', 'True', 'True', 'True', 'True'], inplace=True)
-
-    return mapping_df
-
-
-def extract_tgz(fpath, out_path=None, strict_python=False, log=None):
-
-    if not tarfile.is_tarfile(fpath):
-        return fpath, False
-
-    fname = fpath.split("/")[-1].split("-")
-    scans_folder = os.path.join("{}-{}".format(fname[0], fname[1]), "{}-{}".format(fname[2], fname[3]))
-
-    if not out_path:
-        out_path = os.getcwd()
-        extracted_dir = "{}".format(os.path.join(os.getcwd(), scans_folder))
-    else:
-        extracted_dir = "{}".format(os.path.join(out_path, scans_folder))
-
-    if not strict_python:
-        try:
-            check_output("mkdir -p {} && tar -xf {} -C {}".format(out_path, fpath, out_path), shell=True,
-                         universal_newlines=True, stderr=STDOUT)
-        except CalledProcessError as e:
-            log.warning("Error extracting {}".format(fpath))
-            log.warning("{}".format(e))
-            return fpath, False
-    else:
-        tar = tarfile.open(fpath, "r:gz")
-        tar.extractall(path=out_path)
-        tar.close()
-
-    if log:
-        log.info("Extracted file {} to {} directory.".format(fpath, extracted_dir))
-
-    return fpath, True
-
-
-def parse_dicom(tgz_file, dcm_file, bids_keys, realtime_files=None, strict_python=False,
-                log=None):
-
-    if not strict_python:
-
-        try:
-            oxy_bytes = check_output('tar -O -xf {} {}'.format(tgz_file, dcm_file),
-                                     shell=True, stderr=STDOUT)
-        except CalledProcessError:
-            log.warning("Unable to extract {} from {}".format(dcm_file, tgz_file))
-            return
-
-        oxy_fobj = io.BytesIO(oxy_bytes)
-
-        curr_dcm = dicom.read_file(oxy_fobj, stop_before_pixels=True)
-
-    else:
-
-        tar = tarfile.open(tgz_file)
-        curr_dcm = dicom.read_file(tar.extractfile(dcm_file), stop_before_pixels=True)
-        tar.close()
+    curr_dcm = dicom.read_file(oxy_fobj, stop_before_pixels=True)
 
     for bids_type in bids_keys.keys():
 
@@ -255,8 +86,6 @@ def parse_dicom(tgz_file, dcm_file, bids_keys, realtime_files=None, strict_pytho
                         task = re_match.group(0).strip()
                 elif tag.get("task_name", None):
                     task = tag["task_name"]
-
-                # Todo: IMPLEMENT ENFORCEMENT OF EITHER OF THE TWO TASK SUBKEYS IN KEYFILE VALIDATOR
 
             acq = ""
             if tag.get("acq_regexp", None):

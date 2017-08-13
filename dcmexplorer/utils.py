@@ -41,7 +41,7 @@ def extract_compressed_dicom_metadata(tgz_file, dcm_file, dicom_tags, log=None):
     except CalledProcessError:
         if log:
             log.warning("Unable to extract {} from {}".format(dcm_file, tgz_file))
-        return
+        raise Exception("Unable to extract {} from {}".format(dcm_file, tgz_file))
 
     dcm_fobj = io.BytesIO(dcm_bytes)
 
