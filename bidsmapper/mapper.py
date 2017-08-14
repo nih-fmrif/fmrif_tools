@@ -155,11 +155,6 @@ def gen_map(dicom_dir, heuristics=None, nthreads=get_cpu_count(), log=None):
 
     return mapping_df
 
-# mapping_df = pd.DataFrame(columns=['subject', 'session', 'bids_type', 'task',
-#                                        'acq', 'rec', 'run', 'modality', 'patient_id',
-#                                        'scan_datetime', 'scan_dir', 'resp_physio',
-#                                        'cardiac_physio'])
-
 
 def main():
 

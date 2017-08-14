@@ -5,7 +5,7 @@ import argparse
 import json
 
 from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime
-from oxy2bids.converters import process_bids_map
+from oxy2bids.converters import BIDSConverter
 from bidsmapper.mapper import gen_map
 
 # Main log messages
@@ -107,7 +107,7 @@ def main():
     else:
         bids_map = os.path.join(os.getcwd(), "bids_map_{}.csv".format(start_datetime))
         log.warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically generate one, and store"
-                    "it in {}.".format(bids_map))
+                    " it in {}.".format(bids_map))
 
     heuristics = os.path.abspath(settings.heuristics) if settings.heuristics else None
 
@@ -124,13 +124,14 @@ def main():
 
     log.info(json.dumps(curr_settings, sort_keys=True, indent=2))
 
+    converter = BIDSConverter(conversion_tool='dcm2niix', log=log)
+
     if settings.bids_map:
 
         # Use provided map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
 
-        process_bids_map(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, conversion_tool='dcm2niix', log=log,
-                         start_datetime=start_datetime, nthreads=settings.nthreads)
+        converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads)
 
         log.info(LOG_MESSAGES['shutdown'].format(bids_dir))
 
@@ -150,10 +151,9 @@ def main():
             # Use generated map to convert files
             log.info(LOG_MESSAGES['start_conversion'])
 
-            process_bids_map(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, conversion_tool='dcm2niix',
-                             log=log, start_datetime=start_datetime, nthreads=settings.nthreads)
+            converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads)
 
-            log.info(LOG_MESSAGES['shutdown'])
+            log.info(LOG_MESSAGES['shutdown'].format(bids_dir))
 
         else:
 

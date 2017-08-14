@@ -5,8 +5,10 @@ import shutil
 import pandas as pd
 import json
 import numpy as np
+import string
+import random
 
-from common_utils.utils import create_path, init_log, get_datetime, get_cpu_count
+from common_utils.utils import create_path, init_log, get_cpu_count
 from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -50,8 +52,7 @@ class BIDSConverter(object):
             for handler in self.log.handlers:
                 self.log.removeHandler(handler)
 
-    @staticmethod
-    def physio_to_bids(resp_physio=None, cardiac_physio=None):
+    def _physio_to_bids(self, resp_physio=None, cardiac_physio=None):
 
         physio_df = pd.DataFrame()
         cols = []
@@ -74,26 +75,11 @@ class BIDSConverter(object):
 
         return physio_df, physio_meta
 
-    @staticmethod
-    def parse_bids_map_row(row):
-
-        subject = row['subject']
-        session = row['session']
-        task = row['task']
-        acq = row['acq']
-        rec = row['rec']
-        run = row['run']
-        modality = row['modality']
-        scan_dir = row['scan_dir']
-        resp_physio = row['resp_physio']
-        cardiac_physio = row['cardiac_physio']
-
-        return subject, session, task, acq, rec, run, modality, scan_dir, resp_physio, cardiac_physio
-
     def _dcm2niix(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite=False):
 
         if os.path.isfile(bids_fpath) and not overwrite:
-            self.log.error("The file {} already exists, and --overwrite is set to False. Aborting...".format(bids_fpath))
+            self.log.error("The file {} already exists, and --overwrite is set to "
+                           "False. Aborting...".format(bids_fpath))
             raise Exception(LOG_MESSAGES['abort_msg'])
 
         bids_dir = str(os.path.abspath(os.path.dirname(bids_fpath)))
@@ -103,10 +89,13 @@ class BIDSConverter(object):
         if not os.path.isdir(bids_dir):
             create_path(bids_dir)
 
-        workdir = bids_dir
-        print(workdir)
+        tmp_dir = "tmp_{}".format(''.join(random.choice(
+            string.ascii_uppercase + string.digits) for _ in range(10)))
 
         if compressed:
+
+            workdir = os.path.join(bids_dir, tmp_dir)
+            create_path(workdir)
 
             scan_subject, scan_session, scan_folder = scan_dir.strip().split("/")
             compressed_fpath = os.path.join(dicom_dir, "{}-{}-DICOM.tgz".format(scan_subject, scan_session))
@@ -130,6 +119,8 @@ class BIDSConverter(object):
                 raise Exception(LOG_MESSAGES['abort_msg'])
 
         else:
+
+            workdir = bids_dir
 
             scan_dir = os.path.join(dicom_dir, scan_dir)
 
@@ -158,12 +149,10 @@ class BIDSConverter(object):
                 [s for s in ([s for s in str(result).split('\n') if "Convert" in s][0].split(" "))
                  if s[0] == '/'][0].split("/")[-1]
 
-            print(actual_fname)
-
             # Move nifti file and json bids file to bids folder
-            shutil.move(os.path.join(workdir, "{}.nii.gz".format(actual_fname)),
+            shutil.move(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname)),
                         os.path.join(bids_dir, "{}.nii.gz".format(bids_fname)))
-            shutil.move(os.path.join(workdir, "{}.json".format(actual_fname)),
+            shutil.move(os.path.join(scan_dir, "{}.json".format(actual_fname)),
                         os.path.join(bids_dir, "{}.json".format(bids_fname)))
 
             log_str = LOG_MESSAGES['success_converted'].format(scan_dir, bids_fpath, " ".join(cmd), 0)
@@ -173,22 +162,29 @@ class BIDSConverter(object):
 
             self.log.info(log_str)
 
-            if physio['resp'] or physio['cardiac']:
-
-                self.log.info("Converting physio files to BIDS...")
-
-                physio_df, physio_meta = self.physio_to_bids(resp_physio=physio['resp'],
-                                                             cardiac_physio=physio['cardiac'])
-
-                bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
-
-                physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
-                                 header=False, compression="gzip")
-
-                with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
-                    json.dump(physio_meta, physio_json)
-
-                self.log.info("Finished converting physio files to BIDS...")
+            # if physio['resp'] or physio['cardiac']:
+            #
+            #     if compressed:
+            #         resp_physio = os.path.join(workdir, physio['resp'])
+            #         cardiac_physio = os.path.join(workdir, physio['cardiac'])
+            #     else:
+            #         resp_physio = os.path.join(dicom_dir, physio['resp'])
+            #         cardiac_physio = os.path.join(dicom_dir, physio['cardiac'])
+            #
+            #     self.log.info("Converting physio files to BIDS...")
+            #
+            #     physio_df, physio_meta = self._physio_to_bids(resp_physio=resp_physio,
+            #                                                   cardiac_physio=cardiac_physio)
+            #
+            #     bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
+            #
+            #     physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
+            #                      header=False, compression="gzip")
+            #
+            #     with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
+            #         json.dump(physio_meta, physio_json)
+            #
+            #     self.log.info("Finished converting physio files to BIDS...")
 
             return True
 
@@ -204,14 +200,13 @@ class BIDSConverter(object):
             raise Exception(LOG_MESSAGES['abort_msg'])
 
         finally:
-
             # Clean up temporary files
-            tmp_files = glob(os.path.join(workdir, "*/"))
+            tmp_files = glob(os.path.join(bids_dir, tmp_dir))
 
             if tmp_files:
                 list(map(rmtree, tmp_files))
 
-    def convert_to_bids(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite=False):
+    def _convert_to_bids(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite=False):
 
         if self.conversion_tool == 'dcm2niix':
             return self._dcm2niix(bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite)
@@ -221,25 +216,48 @@ class BIDSConverter(object):
                 "at the moment.".format(self.conversion_tool)
             )
 
+    def map_to_bids(self, bids_map, bids_dir, dicom_dir, nthreads=get_cpu_count(), overwrite=False):
 
-def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', start_datetime=None,
-                     log=None, nthreads=get_cpu_count(), overwrite=False):
+        # Parse bids_map csv table, and create execution list for BIDS generation
+        mapping = pd.read_csv(bids_map, header=0, index_col=None)
+        mapping.replace(np.nan, '', regex=True, inplace=True)
 
-    start_datetime = start_datetime if start_datetime else get_datetime()
+        with ThreadPoolExecutor(max_workers=nthreads) as executor:
 
-    tmp_dir = os.path.join(os.getcwd(), "tmp-{}".format(start_datetime))
+            futures = []
 
-    # Parse bids_map csv table, and create execution list for BIDS generation
-    mapping = pd.read_csv(bids_map, header=0, index_col=None)
-    mapping.replace(np.nan, '', regex=True, inplace=True)
+            for _, row in mapping.iterrows():
+                futures.append(executor.submit(self._process_map_row, row, bids_dir, dicom_dir, self.conversion_tool,
+                                               overwrite))
 
-    # Scans to be converted to bids.
-    exec_list = []
+            wait(futures)
 
-    for idx, row in mapping.iterrows():
+            success = True
 
-        subject, session, task, acq, rec, run, modality, scan_dir, \
-        resp_physio, cardiac_physio = parse_bids_map_row(row)
+            for future in futures:
+
+                if not future.result():
+                    success = False
+                    break
+
+            if not success:
+                self.log.error("There were errors converting the provided datasets to BIDS format. See log for more" 
+                               " information.")
+
+    def _process_map_row(self, row, bids_dir, dicom_dir, conversion_tool='dcm2niix', overwrite=False):
+
+        # Construct the BIDS filename based on the metadata provided in the row
+
+        subject = row['subject']
+        session = row['session']
+        task = row['task']
+        acq = row['acq']
+        rec = row['rec']
+        run = row['run']
+        modality = row['modality']
+        scan_dir = row['scan_dir']
+        resp_physio = row['resp_physio']
+        cardiac_physio = row['cardiac_physio']
 
         bids_name = subject
 
@@ -304,7 +322,9 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
         # the scan is in an uncompressed directory already, or if extraction is needed
         compressed = False if os.path.isdir(os.path.join(dicom_dir, scan_dir)) else True
 
-        exec_list.append({
+        # Based on the above information, compute the execution params
+        exec_params = OrderedDict({
+            'conversion_tool': conversion_tool,
             'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
                                                                       bids_name)),
             'dicom_dir': dicom_dir,
@@ -312,38 +332,19 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
             'compressed': compressed,
             'physio': {
                 'resp': '' if not resp_physio else resp_physio,
-                'cardiac': '' if not cardiac_physio else cardiac_physio}
+                'cardiac': '' if not cardiac_physio else cardiac_physio
+            },
+            'overwrite': overwrite
         })
 
-    # Convert files to Nifti
-    with ThreadPoolExecutor(max_workers=nthreads) as executor:
+        # Convert the file to BIDS format
+        success = self._convert_to_bids(
+            bids_fpath=exec_params['bids_fpath'],
+            scan_dir=exec_params['scan_dir'],
+            dicom_dir=exec_params['dicom_dir'],
+            physio=exec_params['physio'],
+            compressed=exec_params['compressed'],
+            overwrite=exec_params['overwrite']
+        )
 
-        converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
-        futures = []
-
-        for exec_item in exec_list:
-            futures.append(executor.submit(converter.convert_to_bids,
-                                           exec_item['bids_fpath'],
-                                           exec_item['scan_dir'],
-                                           exec_item['dicom_dir'],
-                                           exec_item['physio'],
-                                           exec_item['compressed'],
-                                           overwrite))
-        wait(futures)
-
-        success = True
-
-        for future in futures:
-
-            if not future.result():
-                success = False
-                break
-
-        if not success:
-            log.error("There were errors converting the provided datasets to BIDS format. See log for more"
-                      " information.")
-
-    # Remove tmp dir if it was created
-    if os.path.isdir(tmp_dir):
-        log.info("Removing temporary files")
-        shutil.rmtree(tmp_dir)
+        return success
