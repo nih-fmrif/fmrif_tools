@@ -20,7 +20,7 @@ def explore_dicoms(dicom_dir, dicom_tags, nthreads=None, log=None):
     created_log = False
 
     if not log:
-        log = init_log(os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(get_datetime())))
+        log = init_log(os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(get_datetime())), log_name='dcmexplorer')
         created_log = True
 
     metadata_list = []

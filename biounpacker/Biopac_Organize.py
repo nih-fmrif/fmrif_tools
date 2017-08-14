@@ -62,7 +62,7 @@ def main():
     # Initiate log
     start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     log_fpath = os.path.join(os.getcwd(), "biounpack_{}.log".format(start_datetime))
-    log = init_log(log_fpath)
+    log = init_log(log_fpath, log_name='biounpack')
 
     log.info("Reading biopack file: {}".format(settings.input_file))
 
