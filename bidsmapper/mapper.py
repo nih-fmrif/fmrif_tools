@@ -61,7 +61,7 @@ def gen_map(dicom_dir, heuristics=None, nthreads=get_cpu_count(), log=None):
     log.info("Searching for uncompressed Oxygen\Gold DICOM series in {}".format(dicom_dir))
 
     uncompressed_dicoms = glob(os.path.join(dicom_dir, "*/*/*/*.dcm"))
-    uncompressed_rt = glob(os.path.join(dicom_dir, "*/*/*/*.1D"))
+    uncompressed_rt = glob(os.path.join(dicom_dir, "*/*/realtime/*.1D"))
 
     mr_folders_checked = []
     uncompressed_dicom_scans = []
@@ -79,7 +79,7 @@ def gen_map(dicom_dir, heuristics=None, nthreads=get_cpu_count(), log=None):
     for dicom_file in uncompressed_dicom_scans:
 
         dicom_scan = DicomScan(scan_path=dicom_file, dicom_dir=dicom_dir, compressed=False)
-        scan_name = "scan_{}".format(dicom_scan.get_scan_dir().split("/")[-2].split("_")[-1])
+        scan_name = "scan_{}".format(dicom_scan.get_scan_dir().split("/")[-1].split("_")[-1])
 
         for rt_file in uncompressed_rt:
             if ("ECG" in rt_file) and (scan_name in rt_file):
@@ -222,10 +222,10 @@ def main():
     if settings.log:
         log_fpath = os.path.abspath(settings.log)
     else:
-        log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
+        log_fpath = os.path.join(os.getcwd(), "bidsmapper_{}.log".format(start_datetime))
 
     # Init logger
-    log = init_log(log_fpath, settings.debug)
+    log = init_log(log_fpath, log_name='bidsmapper', debug=settings.debug)
 
     dicom_dir = os.path.abspath(settings.dicom_dir)
 

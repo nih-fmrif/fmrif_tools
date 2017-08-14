@@ -26,7 +26,7 @@ class BIDSConverter(object):
             self.log = log
             self.use_outside_log = True
         else:
-            self.log = init_log(debug=True)
+            self.log = init_log(log_name='BIDSConverter', debug=True)
             self.use_outside_log = False
 
     def __del__(self):
@@ -182,10 +182,18 @@ class BIDSConverter(object):
 
             # If the scan is a DTI scan, move over the bval and bvec files too
             if "_dwi" in bids_fname:
-                shutil.move(os.path.join(scan_dir, "{}.bval".format(actual_fname)),
-                            os.path.join(bids_dir, "{}.bval".format(bids_fname)))
-                shutil.move(os.path.join(scan_dir, "{}.bvec".format(actual_fname)),
-                            os.path.join(bids_dir, "{}.bvec".format(bids_fname)))
+
+                # Need to verify the .bval and .bvec files got created, because sometimes they fail
+                # without throwing an error in dcm2niix
+                if os.path.isfile(os.path.join(scan_dir, "{}.bval".format(actual_fname))):
+
+                    shutil.move(os.path.join(scan_dir, "{}.bval".format(actual_fname)),
+                                os.path.join(bids_dir, "{}.bval".format(bids_fname)))
+
+                if os.path.isfile(os.path.join(scan_dir, "{}.bvec".format(actual_fname))):
+
+                    shutil.move(os.path.join(scan_dir, "{}.bvec".format(actual_fname)),
+                                os.path.join(bids_dir, "{}.bvec".format(bids_fname)))
 
             log_str = LOG_MESSAGES['success_converted'].format(scan_dir, bids_fpath, " ".join(cmd), 0)
 

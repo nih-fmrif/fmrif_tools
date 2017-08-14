@@ -78,11 +78,11 @@ def main():
 
     # Init logger
     if settings.log:
-        log_name = os.path.abspath(settings.log)
+        log_fpath = os.path.abspath(settings.log)
     else:
-        log_name = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
+        log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
 
-    log = init_log(log_name, settings.debug)
+    log = init_log(log_fpath, log_name='oxy2bids', debug=settings.debug)
 
     # Normalize directories
     dicom_dir = os.path.abspath(settings.dicom_dir)
@@ -108,7 +108,7 @@ def main():
         "BIDS Directory": bids_dir,
         "BIDS map": bids_map,
         "Overwrite": settings.overwrite,
-        "Log": log_name,
+        "Log": log_fpath,
         "Number of threads": settings.nthreads
         # "DICOM tags file: {}\n".format("default" if not custom_keys else custom_keys) + \
     }

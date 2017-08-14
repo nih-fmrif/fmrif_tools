@@ -4,10 +4,8 @@ import os
 import errno
 import multiprocessing
 import logging
-import json
 
 from datetime import datetime
-from collections import OrderedDict
 
 
 def get_datetime():
