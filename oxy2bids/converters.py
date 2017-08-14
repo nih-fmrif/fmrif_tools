@@ -156,8 +156,6 @@ class BIDSConverter(object):
 
             result = check_output(cmd, stderr=STDOUT, cwd=workdir, universal_newlines=True)
 
-            print("result: {}".format(result))
-
             # The following line is a hack to get the actual filename returned by the dcm2niix utility. When converting
             # the B0 dcm files, or files that specify which coil they used, or whether they contain phase information,
             # the utility appends some prefixes to the filename it saves, instead of just using
@@ -167,12 +165,6 @@ class BIDSConverter(object):
             pattern = r'(/.*?\.?[^\(]*)'
             match = re.search(pattern, result)
             actual_fname = os.path.basename(match.group().strip())
-
-            # actual_fname = \
-            #     [s for s in ([s for s in str(result).split('\n') if "Convert" in s][0].split(" "))
-            #      if s[0] == '/'][0].split("/")[-1]
-
-            print("\nactual fname: {}\n".format(actual_fname))
 
             # Move nifti file and json bids file to bids folder
             shutil.move(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname)),
