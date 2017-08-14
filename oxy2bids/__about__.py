@@ -5,7 +5,7 @@ FMRIF TOOLS
 
 from datetime import date
 
-__version__ = '0.1a3'
+__version__ = '0.1a4'
 __author__ = 'Jan Varada'
 __email__ = 'jan.varada@nih.gov'
 __maintainer__ = 'Jan Varada'
