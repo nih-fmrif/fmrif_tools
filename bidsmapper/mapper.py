@@ -63,7 +63,20 @@ def gen_map(dicom_dir, heuristics=None, nthreads=get_cpu_count(), log=None):
     uncompressed_dicoms = glob(os.path.join(dicom_dir, "*/*/*/*.dcm"))
     uncompressed_rt = glob(os.path.join(dicom_dir, "*/*/*/*.1D"))
 
-    for dicom_file in uncompressed_dicoms:
+    mr_folders_checked = []
+    uncompressed_dicom_scans = []
+
+    for scan in uncompressed_dicoms:
+
+        scan = scan.strip()
+        curr_dir = os.path.dirname(scan)
+
+        if curr_dir not in mr_folders_checked and scan.endswith(".dcm"):
+
+            uncompressed_dicom_scans.append(scan)
+            mr_folders_checked.append(curr_dir)
+
+    for dicom_file in uncompressed_dicom_scans:
 
         dicom_scan = DicomScan(scan_path=dicom_file, dicom_dir=dicom_dir, compressed=False)
         scan_name = "scan_{}".format(dicom_scan.get_scan_dir().split("/")[-2].split("_")[-1])

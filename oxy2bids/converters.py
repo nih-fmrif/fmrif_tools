@@ -1,6 +1,7 @@
 from __future__ import print_function, unicode_literals
 
 import os
+import re
 import shutil
 import pandas as pd
 import json
@@ -8,32 +9,13 @@ import numpy as np
 import string
 import random
 
+from glob import glob
+from shutil import rmtree
+from collections import OrderedDict
+from oxy2bids.constants import LOG_MESSAGES
 from common_utils.utils import create_path, init_log, get_cpu_count
 from subprocess import CalledProcessError, check_output, STDOUT
-from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
-from collections import OrderedDict
-from shutil import rmtree
-
-
-LOG_MESSAGES = {
-    'success_converted':
-        'Converted {} to {}\n'
-        'Command:\n{}\n'
-        'Return Code:\n{}\n\n',
-    'output':
-        'Output:\n{}\n\n',
-    'dcm2niix_error':
-        'Error running dcm2niix on DICOM series in {} directory.\n'
-        'Command:\n{}\n'
-        'Return Code:\n{}\n\n',
-    'tar_error':
-        'Error extracting tarred file {}.\n'
-        'Command:\n{}\n'
-        'Return Code:\n{}\n\n',
-    'abort_msg':
-        "An error was encountered. See log for details."
-}
 
 
 class BIDSConverter(object):
@@ -101,10 +83,10 @@ class BIDSConverter(object):
             compressed_fpath = os.path.join(dicom_dir, "{}-{}-DICOM.tgz".format(scan_subject, scan_session))
             tar_cmd = 'tar -xf {} {}'.format(compressed_fpath, scan_dir)
 
+            # Extract dicom file
             try:
 
                 check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
-
                 scan_dir = os.path.join(workdir, scan_dir)
 
             except CalledProcessError as e:
@@ -115,8 +97,43 @@ class BIDSConverter(object):
                     log_str += LOG_MESSAGES['output'].format(e.output)
 
                 self.log.error(log_str)
-
                 raise Exception(LOG_MESSAGES['abort_msg'])
+
+            # Extract physio files if present
+            if physio['cardiac']:
+
+                try:
+
+                    tar_cmd = 'tar -xf {} {}'.format(compressed_fpath, physio['cardiac'])
+                    check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
+
+                except CalledProcessError as e:
+
+                    log_str = LOG_MESSAGES['tar_error'].format(compressed_fpath, tar_cmd, e.returncode)
+
+                    if e.output:
+                        log_str += LOG_MESSAGES['output'].format(e.output)
+
+                    self.log.error(log_str)
+                    raise Exception(LOG_MESSAGES['abort_msg'])
+
+            if physio['resp']:
+
+                try:
+
+                    tar_cmd = 'tar -xf {} {}'.format(compressed_fpath, physio['resp'])
+                    check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
+
+                except CalledProcessError as e:
+
+                    log_str = LOG_MESSAGES['tar_error'].format(compressed_fpath, tar_cmd, e.returncode)
+
+                    if e.output:
+                        log_str += LOG_MESSAGES['output'].format(e.output)
+
+                    self.log.error(log_str)
+
+                    raise Exception(LOG_MESSAGES['abort_msg'])
 
         else:
 
@@ -124,7 +141,9 @@ class BIDSConverter(object):
 
             scan_dir = os.path.join(dicom_dir, scan_dir)
 
-        cmd = [
+        try:
+
+            cmd = [
                 "dcm2niix",
                 "-z",
                 "y",
@@ -135,9 +154,9 @@ class BIDSConverter(object):
                 scan_dir
             ]
 
-        try:
-
             result = check_output(cmd, stderr=STDOUT, cwd=workdir, universal_newlines=True)
+
+            print("result: {}".format(result))
 
             # The following line is a hack to get the actual filename returned by the dcm2niix utility. When converting
             # the B0 dcm files, or files that specify which coil they used, or whether they contain phase information,
@@ -145,15 +164,28 @@ class BIDSConverter(object):
             # the specified output filename. There is no option to turn this off (and the author seemed unwilling to
             # add one). With this hack I retrieve the actual filename it used to save the file from the utility output.
             # This might break on future updates of dcm2niix
-            actual_fname = \
-                [s for s in ([s for s in str(result).split('\n') if "Convert" in s][0].split(" "))
-                 if s[0] == '/'][0].split("/")[-1]
+            pattern = r'(/.*?\.?[^\(]*)'
+            match = re.search(pattern, result)
+            actual_fname = os.path.basename(match.group().strip())
+
+            # actual_fname = \
+            #     [s for s in ([s for s in str(result).split('\n') if "Convert" in s][0].split(" "))
+            #      if s[0] == '/'][0].split("/")[-1]
+
+            print("\nactual fname: {}\n".format(actual_fname))
 
             # Move nifti file and json bids file to bids folder
             shutil.move(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname)),
                         os.path.join(bids_dir, "{}.nii.gz".format(bids_fname)))
             shutil.move(os.path.join(scan_dir, "{}.json".format(actual_fname)),
                         os.path.join(bids_dir, "{}.json".format(bids_fname)))
+
+            # If the scan is a DTI scan, move over the bval and bvec files too
+            if "_dwi" in bids_fname:
+                shutil.move(os.path.join(scan_dir, "{}.bval".format(actual_fname)),
+                            os.path.join(bids_dir, "{}.bval".format(bids_fname)))
+                shutil.move(os.path.join(scan_dir, "{}.bvec".format(actual_fname)),
+                            os.path.join(bids_dir, "{}.bvec".format(bids_fname)))
 
             log_str = LOG_MESSAGES['success_converted'].format(scan_dir, bids_fpath, " ".join(cmd), 0)
 
@@ -162,29 +194,29 @@ class BIDSConverter(object):
 
             self.log.info(log_str)
 
-            # if physio['resp'] or physio['cardiac']:
-            #
-            #     if compressed:
-            #         resp_physio = os.path.join(workdir, physio['resp'])
-            #         cardiac_physio = os.path.join(workdir, physio['cardiac'])
-            #     else:
-            #         resp_physio = os.path.join(dicom_dir, physio['resp'])
-            #         cardiac_physio = os.path.join(dicom_dir, physio['cardiac'])
-            #
-            #     self.log.info("Converting physio files to BIDS...")
-            #
-            #     physio_df, physio_meta = self._physio_to_bids(resp_physio=resp_physio,
-            #                                                   cardiac_physio=cardiac_physio)
-            #
-            #     bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
-            #
-            #     physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
-            #                      header=False, compression="gzip")
-            #
-            #     with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
-            #         json.dump(physio_meta, physio_json)
-            #
-            #     self.log.info("Finished converting physio files to BIDS...")
+            if physio['resp'] or physio['cardiac']:
+
+                if compressed:
+                    resp_physio = os.path.join(workdir, physio['resp'])
+                    cardiac_physio = os.path.join(workdir, physio['cardiac'])
+                else:
+                    resp_physio = os.path.join(dicom_dir, physio['resp'])
+                    cardiac_physio = os.path.join(dicom_dir, physio['cardiac'])
+
+                self.log.info("Converting physio files to BIDS...")
+
+                physio_df, physio_meta = self._physio_to_bids(resp_physio=resp_physio,
+                                                              cardiac_physio=cardiac_physio)
+
+                bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
+
+                physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
+                                 header=False, compression="gzip")
+
+                with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
+                    json.dump(physio_meta, physio_json)
+
+                self.log.info("Finished converting physio files to BIDS...")
 
             return True
 

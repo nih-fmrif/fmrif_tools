@@ -4,19 +4,10 @@ import os
 import argparse
 import json
 
+from oxy2bids.constants import LOG_MESSAGES
 from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime
 from oxy2bids.converters import BIDSConverter
 from bidsmapper.mapper import gen_map
-
-# Main log messages
-LOG_MESSAGES = {
-    'start_conversion': "Beginning conversion to BIDS format",
-    'start_map': "Beginning generation of DICOM to BIDS map.",
-    'gen_map_warning': "WARNING: --gen_map and --bids_map flags specified. Will use existing bids map instead of "
-                       "generating one.",
-    'gen_map_done': "Map generation complete. Results stored in {}",
-    'shutdown': "BIDS conversion complete. Results stored in {}"
-}
 
 
 def main():
