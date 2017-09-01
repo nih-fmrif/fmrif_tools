@@ -6,7 +6,6 @@
 #
 bioread==1.0.4
 cycler==0.10.0            # via matplotlib
-dicom==0.9.9.post1
 matplotlib==2.0.2
 numpy==1.13.0
 pandas==0.20.1

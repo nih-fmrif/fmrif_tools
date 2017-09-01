@@ -3,4 +3,3 @@ pandas==0.20.1
 pydicom==0.9.9
 numpy==1.13.0
 bioread==1.0.4
-dicom==0.9.9.post1

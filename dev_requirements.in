@@ -3,6 +3,5 @@ matplotlib==2.0.2
 bioread==1.0.4
 pydicom==0.9.9
 numpy==1.13.0
-dicom==0.9.9.post1
 jupyter
 notebook

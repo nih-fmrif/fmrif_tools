@@ -4,15 +4,12 @@
 def main():
 
     from setuptools import setup, find_packages
-    from oxy2bids.__about__ import (
+    from __about__ import (
         __version__,
         __author__,
         __email__,
-        __maintainer__,
         __copyright__,
-        __credits__,
         __license__,
-        __status__,
         __description__,
         __longdesc__,
         __url__,
@@ -36,10 +33,10 @@ def main():
         long_description=__longdesc__,
         author=__author__,
         author_email=__email__,
+        copyright=__copyright__,
         license=__license__,
         maintainer_email=__email__,
         classifiers=CLASSIFIERS,
-        # Dependencies handling
         install_requires=REQUIRES,
         url=__url__,
         download_url=__download__,
