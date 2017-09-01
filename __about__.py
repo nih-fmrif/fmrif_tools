@@ -34,14 +34,15 @@ CLASSIFIERS = [
     'Intended Audience :: Science/Research',
     'Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator',
     'License :: OSI Approved :: BSD License',
+    'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 2.7',
 ]
 
 REQUIRES = [
     'matplotlib == 2.0.2',
-    'pandas == 0.20.1',
+    'pandas == 0.20.3',
     'pydicom == 0.9.9',
-    'numpy == 1.13.0',
+    'numpy == 1.13.1',
     'bioread == 1.0.4',
 ]

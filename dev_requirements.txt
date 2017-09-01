@@ -28,8 +28,8 @@ mistune==0.7.4            # via nbconvert
 nbconvert==5.3.0          # via jupyter, notebook
 nbformat==4.4.0           # via ipywidgets, nbconvert, notebook
 notebook==5.0.0
-numpy==1.13.0
-pandas==0.20.1
+numpy==1.13.1
+pandas==0.20.3
 pandocfilters==1.4.2      # via nbconvert
 pexpect==4.2.1            # via ipython
 pickleshare==0.7.4        # via ipython
