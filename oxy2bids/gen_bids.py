@@ -35,6 +35,12 @@ def main():
     )
 
     parser.add_argument(
+        "--biopac_dir",
+        help="Path to directory containing biopac files.",
+        default=None
+    )
+
+    parser.add_argument(
         "--heuristics",
         help="Path to a heuristics specification file.",
         default=None
@@ -100,6 +106,8 @@ def main():
         log.warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically generate one, and store"
                     " it in {}.".format(bids_map))
 
+    biopac_dir = os.path.abspath(settings.biopac_dir) if settings.biopac_dir else None
+
     heuristics = os.path.abspath(settings.heuristics) if settings.heuristics else None
 
     # Print the settings
@@ -122,7 +130,8 @@ def main():
         # Use provided map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
 
-        converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads)
+        converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads,
+                              biopac_dir=biopac_dir)
 
         log.info(LOG_MESSAGES['shutdown'].format(bids_dir))
 
@@ -142,7 +151,8 @@ def main():
             # Use generated map to convert files
             log.info(LOG_MESSAGES['start_conversion'])
 
-            converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads)
+            converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads,
+                                  biopac_dir=biopac_dir)
 
             log.info(LOG_MESSAGES['shutdown'].format(bids_dir))
 

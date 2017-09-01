@@ -31,7 +31,7 @@ def biounpacker(biopac_file):
     return biopac_channels
 
 
-if __name__ == "__main__":
+def main():
 
     parser = argparse.ArgumentParser('Options')
 
@@ -129,3 +129,6 @@ if __name__ == "__main__":
     log.info("Biopack data to 1D file conversion complete!")
 
     log_shutdown(log)
+
+if __name__ == "__main__":
+    main()

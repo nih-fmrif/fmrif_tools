@@ -8,11 +8,13 @@ import json
 import numpy as np
 import string
 import random
+import struct
 
 from glob import glob
 from shutil import rmtree
 from collections import OrderedDict
 from oxy2bids.constants import LOG_MESSAGES
+from biounpacker.biopac_organize import biounpacker
 from common_utils.utils import create_path, init_log, get_cpu_count
 from subprocess import CalledProcessError, check_output, STDOUT
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -57,7 +59,37 @@ class BIDSConverter(object):
 
         return physio_df, physio_meta
 
-    def _dcm2niix(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite=False):
+    def _biopac_to_bids(self, biopac_file):
+
+        physio_df = pd.DataFrame()
+        cols = []
+
+        biopac_channels = biounpacker(biopac_file)
+
+        if biopac_channels['ecg']:
+            cardio_df = pd.DataFrame(biopac_channels['ecg'].data, columns=["cardiac"])
+            physio_df = physio_df.append(cardio_df)
+            cols.append("cardiac")
+
+        if biopac_channels['resp']:
+            resp_df = pd.DataFrame(biopac_channels['resp'].data, columns=["respiratory"])
+            physio_df = physio_df.join(resp_df)
+            cols.append("respiratory")
+
+        if biopac_channels['triggers']:
+            trigger_df = pd.DataFrame(biopac_channels['triggers'].data, columns=["triggers"])
+            physio_df = physio_df.join(trigger_df)
+            cols.append("triggers")
+
+        physio_meta = OrderedDict({
+            "SamplingFrequency": biopac_channels['resp'].samples_per_second,
+            "StartTime": biopac_channels['resp'].time_index[0],
+            "Columns": cols
+        })
+
+        return physio_df, physio_meta
+
+    def _dcm2niix(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, biopac_dir=None, overwrite=False):
 
         if os.path.isfile(bids_fpath) and not overwrite:
             self.log.error("The file {} already exists, and --overwrite is set to "
@@ -99,7 +131,7 @@ class BIDSConverter(object):
                 self.log.error(log_str)
                 raise Exception(LOG_MESSAGES['abort_msg'])
 
-            # Extract physio files if present
+            # Extract physio files if present (SIEMENS)
             if physio['cardiac']:
 
                 try:
@@ -194,7 +226,35 @@ class BIDSConverter(object):
 
             self.log.info(log_str)
 
-            if physio['resp'] or physio['cardiac']:
+            if physio['biopac']:
+
+                if not biopac_dir:
+                    err_msg = "Attempted to process biopac file {} but biopac directory was not " \
+                              "specified.".format(physio['biopac'])
+                    self.log.error(err_msg)
+                    raise Exception(err_msg)
+
+                self.log.info("Converting biopac file to BIDS format...")
+
+                try:
+
+                    physio_df, physio_meta = self._biopac_to_bids(os.path.join(biopac_dir, physio['biopac']))
+
+                    bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
+
+                    physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
+                                     header=False, compression="gzip")
+
+                    with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
+                        json.dump(physio_meta, physio_json)
+
+                    self.log.info("Finished converting biopac to BIDS format...")
+
+                except struct.error:
+
+                    self.log.error("There was an error opening biopac file {}.".format(physio['biopac']))
+
+            elif physio['resp'] or physio['cardiac']:
 
                 if compressed:
                     resp_physio = os.path.join(workdir, physio['resp'])
@@ -238,17 +298,17 @@ class BIDSConverter(object):
             if tmp_files:
                 list(map(rmtree, tmp_files))
 
-    def _convert_to_bids(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite=False):
+    def _convert_to_bids(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, biopac_dir=None, overwrite=False):
 
         if self.conversion_tool == 'dcm2niix':
-            return self._dcm2niix(bids_fpath, scan_dir, dicom_dir, physio, compressed, overwrite)
+            return self._dcm2niix(bids_fpath, scan_dir, dicom_dir, physio, compressed, biopac_dir, overwrite)
         else:
             raise Exception(
                 "Tool Error: {} is not a supported conversion tool. We only support dcm2niix "
                 "at the moment.".format(self.conversion_tool)
             )
 
-    def map_to_bids(self, bids_map, bids_dir, dicom_dir, nthreads=get_cpu_count(), overwrite=False):
+    def map_to_bids(self, bids_map, bids_dir, dicom_dir, nthreads=get_cpu_count(), biopac_dir=None, overwrite=False):
 
         # Parse bids_map csv table, and create execution list for BIDS generation
         mapping = pd.read_csv(bids_map, header=0, index_col=None)
@@ -260,7 +320,7 @@ class BIDSConverter(object):
 
             for _, row in mapping.iterrows():
                 futures.append(executor.submit(self._process_map_row, row, bids_dir, dicom_dir, self.conversion_tool,
-                                               overwrite))
+                                               biopac_dir, overwrite))
 
             wait(futures)
 
@@ -276,7 +336,7 @@ class BIDSConverter(object):
                 self.log.error("There were errors converting the provided datasets to BIDS format. See log for more" 
                                " information.")
 
-    def _process_map_row(self, row, bids_dir, dicom_dir, conversion_tool='dcm2niix', overwrite=False):
+    def _process_map_row(self, row, bids_dir, dicom_dir, conversion_tool='dcm2niix', biopac_dir=None, overwrite=False):
 
         # Construct the BIDS filename based on the metadata provided in the row
 
@@ -290,6 +350,7 @@ class BIDSConverter(object):
         scan_dir = row['scan_dir']
         resp_physio = row['resp_physio']
         cardiac_physio = row['cardiac_physio']
+        biopac = row.get('biopac', None)
 
         bids_name = subject
 
@@ -364,8 +425,10 @@ class BIDSConverter(object):
             'compressed': compressed,
             'physio': {
                 'resp': '' if not resp_physio else resp_physio,
-                'cardiac': '' if not cardiac_physio else cardiac_physio
+                'cardiac': '' if not cardiac_physio else cardiac_physio,
+                'biopac': '' if not biopac else biopac
             },
+            'biopac_dir': biopac_dir,
             'overwrite': overwrite
         })
 
@@ -376,6 +439,7 @@ class BIDSConverter(object):
             dicom_dir=exec_params['dicom_dir'],
             physio=exec_params['physio'],
             compressed=exec_params['compressed'],
+            biopac_dir=exec_params['biopac_dir'],
             overwrite=exec_params['overwrite']
         )
 
