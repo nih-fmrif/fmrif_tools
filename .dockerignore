@@ -1,0 +1,28 @@
+# python cache
+__pycache__
+
+# python distribution
+fmrif_tools.egg-info
+src
+
+# git
+.git
+.gitignore
+
+# other
+docs
+
+# config req files
+requirements.in
+docker_requirements.in
+dev_requirements.in
+
+# Non-docker req files
+requirements.txt
+dev_requirements.txt
+
+# Mac files
+.DS_Store
+
+# IDE
+.idea

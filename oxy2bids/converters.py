@@ -1,54 +1,26 @@
 from __future__ import print_function, unicode_literals
 
 import os
+import re
 import shutil
 import pandas as pd
-import numpy as np
-import random
-import string
 import json
+import numpy as np
+import string
+import random
+import struct
 
-from subprocess import CalledProcessError, check_output, STDOUT
 from glob import glob
-from concurrent.futures import ThreadPoolExecutor, wait
-from oxy2bids.utils import create_path, extract_tgz, init_log
-from datetime import datetime
+from shutil import rmtree
 from collections import OrderedDict
-
-
-LOG_MESSAGES = {
-    'success_converted':
-        'Converted {} to {}\n'
-        'Command:\n{}\n'
-        'Return Code:\n{}\n\n',
-    'output':
-        'Output:\n{}\n\n',
-    'dcm2niix_error':
-        'Error running dcm2niix on DICOM series in {} directory.\n'
-        'Command:\n{}\n'
-        'Return Code:\n{}\n\n',
-    'dimon_error':
-        'Error running Dimon on DICOM series in {} directory.\n'
-        'Command:\n{}\n'
-        'Return Code:\n{}\n\n',
-}
-
-DATE_STR = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-
-class NiftyConversionFailure(Exception):
-    def __init__(self, message):
-        self.message = message
-
-
-class DuplicateFile(Exception):
-    def __init__(self, message):
-        self.message = message
+from oxy2bids.constants import LOG_MESSAGES
+from biounpacker.biopac_organize import biounpacker
+from common_utils.utils import create_path, init_log, get_cpu_count
+from subprocess import CalledProcessError, check_output, STDOUT
+from concurrent.futures import ThreadPoolExecutor, wait
 
 
 class BIDSConverter(object):
-
-    use_outside_log = False
 
     def __init__(self, conversion_tool='dcm2niix', log=None):
         self.conversion_tool = conversion_tool
@@ -56,72 +28,154 @@ class BIDSConverter(object):
             self.log = log
             self.use_outside_log = True
         else:
-            self.log = init_log(debug=True)
+            self.log = init_log(log_name='BIDSConverter', debug=True)
+            self.use_outside_log = False
 
     def __del__(self):
         if not self.use_outside_log:
             for handler in self.log.handlers:
                 self.log.removeHandler(handler)
 
-    def physio_to_bids(self, bids_fname, bids_dir, resp_physio=None, cardiac_physio=None):
+    def _physio_to_bids(self, resp_physio=None, cardiac_physio=None):
 
-        if resp_physio or cardiac_physio:
+        physio_df = pd.DataFrame()
+        cols = []
 
-            self.log.info("Converting physio files to BIDS...")
-            physio_df = pd.DataFrame()
-            cols = []
+        if cardiac_physio:
+            cardio_df = pd.read_csv(cardiac_physio, sep="\n", header=None, names=["cardiac"])
+            physio_df = physio_df.append(cardio_df)
+            cols.append("cardiac")
 
-            if cardiac_physio:
-                cardio_df = pd.read_csv(cardiac_physio, sep="\n", header=None, names=["cardiac"])
-                physio_df = physio_df.append(cardio_df)
-                cols.append("cardiac")
+        if resp_physio:
+            resp_df = pd.read_csv(resp_physio, sep="\n", header=None, names=["respiratory"])
+            physio_df = physio_df.join(resp_df)
+            cols.append("respiratory")
 
-            if resp_physio:
-                resp_df = pd.read_csv(resp_physio, sep="\n", header=None, names=["respiratory"])
-                physio_df = physio_df.join(resp_df)
-                cols.append("respiratory")
+        physio_meta = OrderedDict({
+            "SamplingFrequency": 50,
+            "StartTime": 0,
+            "Columns": cols
+        })
 
-            # Save TSV file
-            if bids_fname.endswith('_bold'):
-                bids_fname = bids_fname[:-5]
+        return physio_df, physio_meta
 
-            physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
-                             header=False, compression="gzip")
+    def _biopac_to_bids(self, biopac_file):
 
-            physio_meta = OrderedDict({
-                "SamplingFrequency": 50,
-                "StartTime": 0,
-                "Columns": cols
-            })
+        physio_df = pd.DataFrame()
+        cols = []
 
-            with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
-                json.dump(physio_meta, physio_json)
+        biopac_channels = biounpacker(biopac_file)
 
-            self.log.info("Finished converting physio files to BIDS...")
+        if biopac_channels['ecg']:
+            cardio_df = pd.DataFrame(biopac_channels['ecg'].data, columns=["cardiac"])
+            physio_df = physio_df.append(cardio_df)
+            cols.append("cardiac")
 
-    def convert_to_bids(self, bids_fpath, dcm_dir, physio):
+        if biopac_channels['resp']:
+            resp_df = pd.DataFrame(biopac_channels['resp'].data, columns=["respiratory"])
+            physio_df = physio_df.join(resp_df)
+            cols.append("respiratory")
 
-        if self.conversion_tool == 'dcm2niix':
-            return self._dcm2niix(bids_fpath, dcm_dir, physio)
-        # elif self.conversion_tool == 'dimon':
-        #     self._dimon(bids_fpath, dcm_dir)
-        else:
-            raise NiftyConversionFailure(
-                "Tool Error: {} is not a supported conversion tool. Please select 'dcm2niix' or "
-                "'dimon'".format(self.conversion_tool))
+        if biopac_channels['triggers']:
+            trigger_df = pd.DataFrame(biopac_channels['triggers'].data, columns=["triggers"])
+            physio_df = physio_df.join(trigger_df)
+            cols.append("triggers")
 
-    def _dcm2niix(self, bids_fpath, dcm_dir, physio):
+        physio_meta = OrderedDict({
+            "SamplingFrequency": biopac_channels['resp'].samples_per_second,
+            "StartTime": biopac_channels['resp'].time_index[0],
+            "Columns": cols
+        })
 
-        bids_dir = os.path.abspath(os.path.dirname(bids_fpath))
-        bids_fname = os.path.basename(bids_fpath).split(".")[0]
+        return physio_df, physio_meta
+
+    def _dcm2niix(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, biopac_dir=None, overwrite=False):
+
+        if os.path.isfile(bids_fpath) and not overwrite:
+            self.log.error("The file {} already exists, and --overwrite is set to "
+                           "False. Aborting...".format(bids_fpath))
+            raise Exception(LOG_MESSAGES['abort_msg'])
+
+        bids_dir = str(os.path.abspath(os.path.dirname(bids_fpath)))
+        bids_fname = str(os.path.basename(bids_fpath).split(".")[0])
 
         # Create the bids output directory if it does not exist
         if not os.path.isdir(bids_dir):
             create_path(bids_dir)
 
-        workdir = dcm_dir
+        tmp_dir = "tmp_{}".format(''.join(random.choice(
+            string.ascii_uppercase + string.digits) for _ in range(10)))
 
-        cmd = [
+        if compressed:
+
+            workdir = os.path.join(bids_dir, tmp_dir)
+            create_path(workdir)
+
+            scan_subject, scan_session, scan_folder = scan_dir.strip().split("/")
+            compressed_fpath = os.path.join(dicom_dir, "{}-{}-DICOM.tgz".format(scan_subject, scan_session))
+            tar_cmd = 'tar -xf {} {}'.format(compressed_fpath, scan_dir)
+
+            # Extract dicom file
+            try:
+
+                check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
+                scan_dir = os.path.join(workdir, scan_dir)
+
+            except CalledProcessError as e:
+
+                log_str = LOG_MESSAGES['tar_error'].format(compressed_fpath, tar_cmd, e.returncode)
+
+                if e.output:
+                    log_str += LOG_MESSAGES['output'].format(e.output)
+
+                self.log.error(log_str)
+                raise Exception(LOG_MESSAGES['abort_msg'])
+
+            # Extract physio files if present (SIEMENS)
+            if physio['cardiac']:
+
+                try:
+
+                    tar_cmd = 'tar -xf {} {}'.format(compressed_fpath, physio['cardiac'])
+                    check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
+
+                except CalledProcessError as e:
+
+                    log_str = LOG_MESSAGES['tar_error'].format(compressed_fpath, tar_cmd, e.returncode)
+
+                    if e.output:
+                        log_str += LOG_MESSAGES['output'].format(e.output)
+
+                    self.log.error(log_str)
+                    raise Exception(LOG_MESSAGES['abort_msg'])
+
+            if physio['resp']:
+
+                try:
+
+                    tar_cmd = 'tar -xf {} {}'.format(compressed_fpath, physio['resp'])
+                    check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
+
+                except CalledProcessError as e:
+
+                    log_str = LOG_MESSAGES['tar_error'].format(compressed_fpath, tar_cmd, e.returncode)
+
+                    if e.output:
+                        log_str += LOG_MESSAGES['output'].format(e.output)
+
+                    self.log.error(log_str)
+
+                    raise Exception(LOG_MESSAGES['abort_msg'])
+
+        else:
+
+            workdir = bids_dir
+
+            scan_dir = os.path.join(dicom_dir, scan_dir)
+
+        try:
+
+            cmd = [
                 "dcm2niix",
                 "-z",
                 "y",
@@ -129,10 +183,8 @@ class BIDSConverter(object):
                 "y",
                 "-f",
                 bids_fname,
-                dcm_dir
+                scan_dir
             ]
-
-        try:
 
             result = check_output(cmd, stderr=STDOUT, cwd=workdir, universal_newlines=True)
 
@@ -142,168 +194,163 @@ class BIDSConverter(object):
             # the specified output filename. There is no option to turn this off (and the author seemed unwilling to
             # add one). With this hack I retrieve the actual filename it used to save the file from the utility output.
             # This might break on future updates of dcm2niix
-            actual_fname = \
-                [s for s in ([s for s in str(result).split('\n') if "Convert" in s][0].split(" "))
-                 if s[0] == '/'][0].split("/")[-1]
+            pattern = r'(/.*?\.?[^\(]*)'
+            match = re.search(pattern, result)
+            actual_fname = os.path.basename(match.group().strip())
 
             # Move nifti file and json bids file to bids folder
-            shutil.move(os.path.join(workdir, "{}.nii.gz".format(actual_fname)),
+            shutil.move(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname)),
                         os.path.join(bids_dir, "{}.nii.gz".format(bids_fname)))
-            shutil.move(os.path.join(workdir, "{}.json".format(actual_fname)),
+            shutil.move(os.path.join(scan_dir, "{}.json".format(actual_fname)),
                         os.path.join(bids_dir, "{}.json".format(bids_fname)))
 
-            log_str = LOG_MESSAGES['success_converted'].format(dcm_dir, bids_fpath, " ".join(cmd), 0)
+            # If the scan is a DTI scan, move over the bval and bvec files too
+            if "_dwi" in bids_fname:
+
+                # Need to verify the .bval and .bvec files got created, because sometimes they fail
+                # without throwing an error in dcm2niix
+                if os.path.isfile(os.path.join(scan_dir, "{}.bval".format(actual_fname))):
+
+                    shutil.move(os.path.join(scan_dir, "{}.bval".format(actual_fname)),
+                                os.path.join(bids_dir, "{}.bval".format(bids_fname)))
+
+                if os.path.isfile(os.path.join(scan_dir, "{}.bvec".format(actual_fname))):
+
+                    shutil.move(os.path.join(scan_dir, "{}.bvec".format(actual_fname)),
+                                os.path.join(bids_dir, "{}.bvec".format(bids_fname)))
+
+            log_str = LOG_MESSAGES['success_converted'].format(scan_dir, bids_fpath, " ".join(cmd), 0)
 
             if result:
                 log_str += LOG_MESSAGES['output'].format(result)
 
             self.log.info(log_str)
 
-            if physio['resp'] or physio['cardiac']:
-                self.physio_to_bids(bids_fname=bids_fname, bids_dir=bids_dir, resp_physio=physio['resp'],
-                                    cardiac_physio=physio['cardiac'])
+            if physio['biopac']:
 
-            return dcm_dir, True
+                if not biopac_dir:
+                    err_msg = "Attempted to process biopac file {} but biopac directory was not " \
+                              "specified.".format(physio['biopac'])
+                    self.log.error(err_msg)
+                    raise Exception(err_msg)
+
+                self.log.info("Converting biopac file to BIDS format...")
+
+                try:
+
+                    physio_df, physio_meta = self._biopac_to_bids(os.path.join(biopac_dir, physio['biopac']))
+
+                    bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
+
+                    physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
+                                     header=False, compression="gzip")
+
+                    with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
+                        json.dump(physio_meta, physio_json)
+
+                    self.log.info("Finished converting biopac to BIDS format...")
+
+                except struct.error:
+
+                    self.log.error("There was an error opening biopac file {}.".format(physio['biopac']))
+
+            elif physio['resp'] or physio['cardiac']:
+
+                if compressed:
+                    resp_physio = os.path.join(workdir, physio['resp'])
+                    cardiac_physio = os.path.join(workdir, physio['cardiac'])
+                else:
+                    resp_physio = os.path.join(dicom_dir, physio['resp'])
+                    cardiac_physio = os.path.join(dicom_dir, physio['cardiac'])
+
+                self.log.info("Converting physio files to BIDS...")
+
+                physio_df, physio_meta = self._physio_to_bids(resp_physio=resp_physio,
+                                                              cardiac_physio=cardiac_physio)
+
+                bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
+
+                physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
+                                 header=False, compression="gzip")
+
+                with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
+                    json.dump(physio_meta, physio_json)
+
+                self.log.info("Finished converting physio files to BIDS...")
+
+            return True
 
         except CalledProcessError as e:
 
-            log_str = LOG_MESSAGES['dcm2niix_error'].format(dcm_dir, " ".join(cmd), e.returncode)
+            log_str = LOG_MESSAGES['dcm2niix_error'].format(scan_dir, " ".join(cmd), e.returncode)
 
             if e.output:
                 log_str += LOG_MESSAGES['output'].format(e.output)
 
             self.log.error(log_str)
 
-            return dcm_dir, False
+            raise Exception(LOG_MESSAGES['abort_msg'])
 
         finally:
-
             # Clean up temporary files
-            tmp_files = glob(os.path.join(workdir, "*.nii.gz"))
-            tmp_files.extend(glob(os.path.join(workdir, "*.json")))
+            tmp_files = glob(os.path.join(bids_dir, tmp_dir))
 
             if tmp_files:
-                list(map(os.remove, tmp_files))
+                list(map(rmtree, tmp_files))
 
-    # def _dimon(self, bids_fpath, dcm_fpath):
-    #     pass
-    #
-    #     dcm_dir = os.path.dirname(dcm_fpath)
-    #
-    #     bids_dir = os.path.dirname(bids_fpath)
-    #     bids_fname = os.path.basename(bids_fpath).split(".")[0]
-    #
-    #     # Create the bids output directory if it does not exist
-    #     if not os.path.isdir(os.path.dirname(bids_dir)):
-    #         create_path(os.path.dirname(bids_dir))
-    #
-    #     workdir = dcm_dir
-    #
-    #     # IMPLEMENT GENERATION OF BIDS METADATA FILES WHEN USING DIMON FOR CONVERSION OF DCM FILES
-    #
-    #     cmd = [
-    #         "Dimon",
-    #         "-infile_pattern",
-    #         os.path.join(workdir, "*.dcm"),
-    #         "-gert_create_dataset",
-    #         "-gert_quit_on_err",
-    #         "-gert_to3d_prefix",
-    #         "{}.nii.gz".format(bids_fname)
-    #     ]
-    #
-    #     dimon_env = os.environ.copy()
-    #     dimon_env['AFNI_TO3D_OUTLIERS'] = 'No'
-    #
-    #     try:
-    #
-    #         result = check_output(cmd, stderr=STDOUT, env=dimon_env, cwd=workdir, universal_newlines=True)
-    #
-    #         # Check the contents of stdout for the -quit_on_err flag because to3d returns a success code
-    #         # even if it terminates because the -quit_on_err flag was thrown
-    #         if "to3d kept from going into interactive mode by option -quit_on_err" in result:
-    #
-    #             log_str = LOG_MESSAGES['dimon_error'].format(dcm_fpath, " ".join(cmd), 0)
-    #
-    #             if result:
-    #                 log_str += LOG_MESSAGES['output'].format(result)
-    #
-    #             self.log.info(log_str)
-    #
-    #             return dcm_fpath, False
-    #
-    #         shutil.move(os.path.join(workdir, "{}.nii.gz".format(out_fpath)),
-    #                     os.path.join(os.path.dirname(bids_fpath), "{}.nii.gz".format(out_fname)))
-    #
-    #         dcm_file = [f for f in os.listdir(dcm_dir) if ".dcm" in f][0]
-    #
-    #         log_str = LOG_MESSAGES['success_converted'].format(os.path.join(dcm_dir, dcm_file), out_fname,
-    #                                                            " ".join(cmd), 0)
-    #
-    #         if result:
-    #             log_str += LOG_MESSAGES['output'].format(result)
-    #
-    #         log_output(log_str, logger=logger, semaphore=semaphore)
-    #
-    #         return dcm_dir, True
-    #
-    #     except CalledProcessError as e:
-    #
-    #         log_str = LOG_MESSAGES['dimon_error'].format(dcm_dir, " ".join(cmd), e.returncode)
-    #
-    #         if e.output:
-    #             log_str += LOG_MESSAGES['output'].format(e.output)
-    #
-    #         log_output(log_str, level="ERROR", logger=logger, semaphore=semaphore)
-    #
-    #         return dcm_dir, False
-    #
-    #     finally:
-    #
-    #         # Clean up temporary files
-    #         tmp_files = glob(os.path.join(dimon_workdir, "GERT_Reco_dicom*"))
-    #         tmp_files.extend(glob(os.path.join(dimon_workdir, "dimon.files.run.*")))
-    #
-    #         if tmp_files:
-    #             list(map(os.remove, tmp_files))
-    #
+    def _convert_to_bids(self, bids_fpath, scan_dir, dicom_dir, physio, compressed, biopac_dir=None, overwrite=False):
 
+        if self.conversion_tool == 'dcm2niix':
+            return self._dcm2niix(bids_fpath, scan_dir, dicom_dir, physio, compressed, biopac_dir, overwrite)
+        else:
+            raise Exception(
+                "Tool Error: {} is not a supported conversion tool. We only support dcm2niix "
+                "at the moment.".format(self.conversion_tool)
+            )
 
-def parse_bids_map_row(row):
+    def map_to_bids(self, bids_map, bids_dir, dicom_dir, nthreads=get_cpu_count(), biopac_dir=None, overwrite=False):
 
-    subject = row['subject']
-    session = row['session']
-    task = row['task']
-    acq = row['acq']
-    rec = row['rec']
-    run = row['run']
-    modality = row['modality']
-    oxy_file = row['oxy_file']
-    scan_dir = row['scan_dir']
-    resp_physio = row['resp_physio']
-    cardiac_physio = row['cardiac_physio']
+        # Parse bids_map csv table, and create execution list for BIDS generation
+        mapping = pd.read_csv(bids_map, header=0, index_col=None)
+        mapping.replace(np.nan, '', regex=True, inplace=True)
 
-    return subject, session, task, acq, rec, run, modality, oxy_file, scan_dir, resp_physio, cardiac_physio
+        with ThreadPoolExecutor(max_workers=nthreads) as executor:
 
+            futures = []
 
-def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', start_datetime=None,
-                     strict_python=False, log=None, nthreads=0, overwrite=False):
+            for _, row in mapping.iterrows():
+                futures.append(executor.submit(self._process_map_row, row, bids_dir, dicom_dir, self.conversion_tool,
+                                               biopac_dir, overwrite))
 
-    if not start_datetime:
-        start_datetime = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+            wait(futures)
 
-    tmp_dir = os.path.join(os.getcwd(), "tmp-{}".format(start_datetime))
+            success = True
 
-    # Parse bids_map csv table, and create execution list for BIDS generation
-    mapping = pd.read_csv(bids_map, header=0, index_col=None)
-    mapping.replace(np.nan, '', regex=True, inplace=True)
+            for future in futures:
 
-    tgz_files = {}
-    exec_list = []
+                if not future.result():
+                    success = False
+                    break
 
-    for idx, row in mapping.iterrows():
+            if not success:
+                self.log.error("There were errors converting the provided datasets to BIDS format. See log for more" 
+                               " information.")
 
-        subject, session, task, acq, rec, run, modality, oxy_file, \
-        scan_dir, resp_physio, cardiac_physio = parse_bids_map_row(row)
+    def _process_map_row(self, row, bids_dir, dicom_dir, conversion_tool='dcm2niix', biopac_dir=None, overwrite=False):
+
+        # Construct the BIDS filename based on the metadata provided in the row
+
+        subject = row['subject']
+        session = row['session']
+        task = row['task']
+        acq = row['acq']
+        rec = row['rec']
+        run = row['run']
+        modality = row['modality']
+        scan_dir = row['scan_dir']
+        resp_physio = row['resp_physio']
+        cardiac_physio = row['cardiac_physio']
+        biopac = row.get('biopac', None)
 
         bids_name = subject
 
@@ -364,69 +411,36 @@ def process_bids_map(bids_map, bids_dir, dicom_dir, conversion_tool='dcm2niix', 
             else:
                 bids_name += '_{}'.format(modality)
 
-        oxy_fpath = os.path.join(dicom_dir, oxy_file)
-        if tgz_files.get(oxy_fpath, None) is None:
-            tgz_files[oxy_fpath] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+        # Get the directory of the scan files relative to the dicom directory, and determine whether
+        # the scan is in an uncompressed directory already, or if extraction is needed
+        compressed = False if os.path.isdir(os.path.join(dicom_dir, scan_dir)) else True
 
-        exec_list.append({
+        # Based on the above information, compute the execution params
+        exec_params = OrderedDict({
+            'conversion_tool': conversion_tool,
             'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
                                                                       bids_name)),
-            'scan_dir': os.path.join(tmp_dir, tgz_files[oxy_fpath], scan_dir),
+            'dicom_dir': dicom_dir,
+            'scan_dir': scan_dir,
+            'compressed': compressed,
             'physio': {
-                'resp': '' if not resp_physio else os.path.join(tmp_dir, tgz_files[oxy_fpath], resp_physio),
-                'cardiac': '' if not cardiac_physio else os.path.join(tmp_dir, tgz_files[oxy_fpath], cardiac_physio)}
+                'resp': '' if not resp_physio else resp_physio,
+                'cardiac': '' if not cardiac_physio else cardiac_physio,
+                'biopac': '' if not biopac else biopac
+            },
+            'biopac_dir': biopac_dir,
+            'overwrite': overwrite
         })
 
-    if nthreads < 2:  # Process sequentially
+        # Convert the file to BIDS format
+        success = self._convert_to_bids(
+            bids_fpath=exec_params['bids_fpath'],
+            scan_dir=exec_params['scan_dir'],
+            dicom_dir=exec_params['dicom_dir'],
+            physio=exec_params['physio'],
+            compressed=exec_params['compressed'],
+            biopac_dir=exec_params['biopac_dir'],
+            overwrite=exec_params['overwrite']
+        )
 
-        # Extract the TGZ files
-        for tgz_file in tgz_files.keys():
-            extract_tgz(tgz_file, out_path=os.path.join(tmp_dir, tgz_files[tgz_file]), strict_python=strict_python,
-                        log=log)
-
-        # Convert files to NIFTI
-        converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
-        for exec_item in exec_list:
-            converter.convert_to_bids(exec_item['bids_fpath'], exec_item['scan_dir'], exec_item['physio'])
-
-    else:
-
-        # Extract TGZ files
-        with ThreadPoolExecutor(max_workers=nthreads) as executor:
-
-            futures = []
-
-            for tgz_file in tgz_files.keys():
-                futures.append(executor.submit(extract_tgz, tgz_file,
-                                               out_path=os.path.join(tmp_dir, tgz_files[tgz_file]),
-                                               strict_python=strict_python, log=log))
-            wait(futures)
-
-            for future in futures:
-                tgz_fpath, success = future.result()
-
-                if not success:
-                    log.error("Could not extract file {}".format(tgz_fpath))
-
-        # Convert files to Nifti
-        with ThreadPoolExecutor(max_workers=nthreads) as executor:
-
-            converter = BIDSConverter(conversion_tool=conversion_tool, log=log)
-            futures = []
-
-            for exec_item in exec_list:
-                futures.append(executor.submit(converter.convert_to_bids, exec_item['bids_fpath'],
-                                               exec_item['scan_dir'], exec_item['physio']))
-            wait(futures)
-
-            for future in futures:
-
-                dcm_dir, success = future.result()
-
-                if not success:
-                    log.error("Could not convert DICOM series in {}".format(dcm_dir))
-
-    # Remove tmp dir if it was created
-    if os.path.isdir(tmp_dir):
-        log.info("Removing temporary files")
-        shutil.rmtree(tmp_dir)
+        return success

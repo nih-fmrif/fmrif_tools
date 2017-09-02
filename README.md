@@ -12,8 +12,16 @@ the National Institutes of Health. The utilities run under either Python 2.7+ or
     directory structure
  </li>
  <li>
-    <b>biounpack (Coming Soon)</b> - A utility to extract physiological recording data from biopack files and save it
+    <b>biounpack</b> - A utility to extract physiological recording data from biopack files and save it
     as independent respiratory, cardiac, and trigger 1D data files.
+ </li>
+  <li>
+    <b>dcmexplorer</b> - A utility to parse DICOM files from Oxygen and Gold servers and explore their tags based
+    on a user-provided DICOM tag specification file.
+ </li>
+  <li>
+    <b>bidsmapper</b> - A utility to generate a DICOM to BIDS mapping file from a set of Oxygen/Gold archives based 
+    on user-provided heuristics and DICOM tags.
  </li>
 </ul> 
 
