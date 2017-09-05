@@ -1,7 +1,6 @@
 from __future__ import print_function, unicode_literals
 
 import os
-import re
 import shutil
 import pandas as pd
 import json
@@ -17,7 +16,7 @@ from oxy2bids.constants import LOG_MESSAGES
 from biounpacker.biopac_organize import biounpacker
 from common_utils.utils import create_path, init_log, get_cpu_count
 from subprocess import CalledProcessError, check_output, STDOUT
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class BIDSConverter(object):
@@ -118,8 +117,11 @@ class BIDSConverter(object):
             # Extract dicom file
             try:
 
+                self.log.info("Extracting scan {} from file {}...".format(scan_dir, compressed_fpath))
+                orig_scan_dir = scan_dir
                 check_output(tar_cmd, shell=True, stderr=STDOUT, cwd=workdir)
                 scan_dir = os.path.join(workdir, scan_dir)
+                self.log.info("Scan {} extracted to {}.".format(orig_scan_dir, scan_dir))
 
             except CalledProcessError as e:
 
@@ -173,18 +175,22 @@ class BIDSConverter(object):
 
             scan_dir = os.path.join(dicom_dir, scan_dir)
 
+        # Convert extracted DICOMs to NIFTI
+
+        cmd = [
+            "dcm2niix",
+            "-z",
+            "y",
+            "-b",
+            "y",
+            "-f",
+            bids_fname,
+            scan_dir
+        ]
+
         try:
 
-            cmd = [
-                "dcm2niix",
-                "-z",
-                "y",
-                "-b",
-                "y",
-                "-f",
-                bids_fname,
-                scan_dir
-            ]
+            self.log.info("Converting scan {} to BIDS file {}...".format(scan_dir, bids_fname))
 
             result = check_output(cmd, stderr=STDOUT, cwd=workdir, universal_newlines=True)
 
@@ -194,9 +200,16 @@ class BIDSConverter(object):
             # the specified output filename. There is no option to turn this off (and the author seemed unwilling to
             # add one). With this hack I retrieve the actual filename it used to save the file from the utility output.
             # This might break on future updates of dcm2niix
-            pattern = r'(/.*?\.?[^\(]*)'
-            match = re.search(pattern, result)
-            actual_fname = os.path.basename(match.group().strip())
+
+            convert_line = ""
+            for line in str(result).split("\n"):
+                if line.startswith("Convert"):
+                    convert_line = line
+
+            if not convert_line:
+                raise CalledProcessError(-1, cmd, output=result)
+
+            actual_fname = os.path.basename(convert_line.split(" ")[-2])
 
             # Move nifti file and json bids file to bids folder
             shutil.move(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname)),
@@ -242,8 +255,8 @@ class BIDSConverter(object):
 
                     bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
 
-                    physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
-                                     header=False, compression="gzip")
+                    physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t",
+                                     index=False, header=False, compression="gzip")
 
                     with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
                         json.dump(physio_meta, physio_json)
@@ -322,11 +335,9 @@ class BIDSConverter(object):
                 futures.append(executor.submit(self._process_map_row, row, bids_dir, dicom_dir, self.conversion_tool,
                                                biopac_dir, overwrite))
 
-            wait(futures)
-
             success = True
 
-            for future in futures:
+            for future in as_completed(futures):
 
                 if not future.result():
                     success = False
