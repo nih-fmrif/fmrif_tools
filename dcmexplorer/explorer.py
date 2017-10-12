@@ -3,24 +3,29 @@ from __future__ import print_function, unicode_literals
 import os
 import argparse
 import json
-import pkg_resources
 import pandas as pd
 
+from common_utils.config import get_config
 from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime, validate_dicom_tags
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
 from itertools import repeat
 from dcmexplorer.utils import get_sample_dicoms, extract_compressed_dicom_metadata, \
                               extract_uncompressed_dicom_metadata
-from collections import OrderedDict
 
 
-def explore_dicoms(dicom_dir, dicom_tags, nthreads=None, log=None):
+def explore_dicoms(settings):
+
+    dicom_dir = settings["dicom_dir"]
+    dicom_tags = settings["config"]["DICOM_TAGS"]
+    nthreads = settings["nthreads"]
+    log = settings["log"]
 
     created_log = False
 
     if not log:
-        log = init_log(os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(get_datetime())), log_name='dcmexplorer')
+        log = init_log(os.path.join(settings["out_dir"], "dcmexplorer_{}.log".format(get_datetime())),
+                       log_name='dcmexplorer')
         created_log = True
 
     metadata_list = []
@@ -111,6 +116,8 @@ def explore_dicoms(dicom_dir, dicom_tags, nthreads=None, log=None):
 
 def main():
 
+    start_datetime = get_datetime()
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -119,19 +126,19 @@ def main():
     )
 
     parser.add_argument(
-        "output_file",
-        help="Path to directory containing .tgz files from oxygen",
+        "out_dir",
+        help="Output directory.",
     )
 
     parser.add_argument(
-        "--dicom_tags",
-        help="Path to a DICOM header tag specification file.",
+        "--config",
+        help="Configuration file.",
         default=None
     )
 
     parser.add_argument(
         "--log",
-        help="Log filepath. Default will be oxy2bids_<timestamp>.log in current working directory.",
+        help="Log filename. Default will be oxy2bids_<timestamp>.log in the directory specified in the out_dir tag.",
         default=None
     )
 
@@ -142,46 +149,51 @@ def main():
         type=int
     )
 
-    settings = parser.parse_args()
+    cli_args = parser.parse_args()
 
-    dicom_dir = os.path.abspath(settings.dicom_dir)
+    out_dir = os.path.abspath(cli_args.out_dir)
 
-    # Init logging system
-    if settings.log:
-        log_fpath = os.path.abspath(settings.log)
+    # Init Logger
+    if cli_args.log:
+        log_fpath = os.path.join(out_dir, cli_args.log)
     else:
-        log_fpath = os.path.join(os.getcwd(), "dcmexplorer_{}.log".format(get_datetime()))
+        log_fpath = os.path.join(out_dir, "oxy2bids_{}.log".format(start_datetime))
 
     log = init_log(log_fpath, 'dcmexplorer')
 
-    # Use user-supplied Dicom tags if specified, otherwise use default tags in
-    # dcmexplorer/data/dicom_tags.json
-    if settings.dicom_tags:
-        log.info("Parsing user-specified Dicom tags...")
-        tag_fpath = os.path.abspath(settings.dicom_tags)
-        with open(tag_fpath, 'r') as tags:
-            dicom_tags = json.load(tags, object_pairs_hook=OrderedDict)
-        log.info("Validating Dicom tags...")
-        validate_dicom_tags(dicom_tags, log=log)
-        log.info("Successfully parsed Dicom tags!")
-    else:
-        log.info("Loading default Dicom tags...")
-        default_tags = pkg_resources.resource_filename("dcmexplorer", "data/dicom_tags.json")
-        with open(default_tags, 'r') as tags:
-            dicom_tags = json.load(tags, object_pairs_hook=OrderedDict)
-        log.info("Validating default Dicom tags...")
-        validate_dicom_tags(dicom_tags, log=log)
-        log.info("Successfully loaded default Dicom tags!")
+    # Load config file
+    settings = {
+        "config": get_config()
+    }
 
-    metadata = explore_dicoms(dicom_dir, dicom_tags=dicom_tags, nthreads=settings.nthreads, log=log)
+    # If there is a custom config file, load it and overwrite any of the config fields
+    # in the default config var
+    if cli_args.config:
+        try:
+            custom_config = json.load(os.path.abspath(cli_args.config))
+            for key in custom_config.keys():
+                settings["config"][key] = custom_config[key]
+        except IOError:
+            print("There was a problem loading the supplied configuration file. Aborting...")
+            return
+
+    log.info("Validating Dicom tags...")
+    validate_dicom_tags(settings["config"]["DICOM_TAGS"], log=log)
+    log.info("Successfully parsed Dicom tags!")
+
+    # Normalize directories
+    dicom_dir = os.path.abspath(cli_args.dicom_dir)
+
+    settings["out_dir"] = out_dir
+    settings["dicom_dir"] = dicom_dir
+    settings["nthreads"] = cli_args.nthreads
+    settings["log"] = log
+
+    metadata = explore_dicoms(settings)
 
     if metadata is not None:
         # Export metadata as CSV file
-        if os.path.basename(settings.output_file):
-            output_file = os.path.abspath(settings.output_file)
-        else:
-            output_file = os.path.join(os.getcwd(), settings.output_file)
-
+        output_file = os.path.join(out_dir, "metadata_{}.csv".format(start_datetime))
         metadata.to_csv(output_file, sep=',', na_rep='', index=False)
     else:
         log.warning("No valid Dicom datasets found.")

@@ -5,6 +5,7 @@ import argparse
 import json
 
 from oxy2bids.constants import LOG_MESSAGES
+from common_utils.config import get_config
 from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime
 from oxy2bids.converters import BIDSConverter
 from bidsmapper.mapper import gen_map
@@ -18,19 +19,25 @@ def main():
 
     parser.add_argument(
         "dicom_dir",
-        help="Path to directory containing .tgz files from oxygen",
+        help="Path to directory containing .tgz files from oxygen/gold",
+    )
+
+    parser.add_argument(
+        "out_dir",
+        help="Path to base output directory"
     )
 
     parser.add_argument(
         "--bids_dir",
-        help="Path to desired top-level output directory of BIDS-formatted dataset. If not specified, a directory named"
-             " bids_data_<timestamp> in the current working directory will be created.",
+        help="Name for top-level output of BIDS-formatted dataset. If not specified, a directory named"
+             " bids_data_<timestamp> will be created.",
         default=None
     )
 
     parser.add_argument(
         "--bids_map",
-        help="Path to a preexisting DICOM to BIDS mapping.",
+        help="Filepath of pre-existing DICOM to BIDS mapping. If the file specified does not exist, will "
+             "use the provided filename to name an automatically created mapping.",
         default=None
     )
 
@@ -40,18 +47,7 @@ def main():
         default=None
     )
 
-    parser.add_argument(
-        "--heuristics",
-        help="Path to a heuristics specification file.",
-        default=None
-    )
-
-    parser.add_argument(
-        "--dicom_tags",
-        help="Path to a DICOM header tag specification file.",
-        default=None
-    )
-
+    # TODO: IMPLEMENT THIS
     parser.add_argument(
         "--overwrite",
         help="Overwrite existing files in BIDS data folder.",
@@ -61,7 +57,7 @@ def main():
 
     parser.add_argument(
         "--log",
-        help="Log filename. Default will be oxy2bids_<timestamp>.log in current working directory.",
+        help="Log filename. Default will be oxy2bids_<timestamp>.log",
         default=None
     )
 
@@ -72,6 +68,12 @@ def main():
         type=int
     )
 
+    parser.add_argument(
+        "--config",
+        help="Custom config file",
+        default=None
+    )
+
     # TODO: Refactor some of the log msgs to only show up if this flag is set
     parser.add_argument(
         "--debug",
@@ -80,58 +82,87 @@ def main():
         default=False
     )
 
-    settings = parser.parse_args()
+    cli_args = parser.parse_args()
 
-    # Init logger
-    if settings.log:
-        log_fpath = os.path.abspath(settings.log)
+    out_dir = os.path.abspath(cli_args.out_dir)
+
+    # Init Logger
+    if cli_args.log:
+        log_fpath = os.path.join(out_dir, cli_args.log)
     else:
-        log_fpath = os.path.join(os.getcwd(), "oxy2bids_{}.log".format(start_datetime))
+        log_fpath = os.path.join(out_dir, "oxy2bids_{}.log".format(start_datetime))
 
-    log = init_log(log_fpath, log_name='oxy2bids', debug=settings.debug)
+    log = init_log(log_fpath, log_name='oxy2bids', debug=cli_args.debug)
+
+    # Load config file
+    settings = {
+        "config": get_config()
+    }
+
+    # If there is a custom config file, load it and overwrite any of the config fields
+    # in the default config var
+    if cli_args.config:
+        try:
+            custom_config = json.load(os.path.abspath(cli_args.config))
+            for key in custom_config.keys():
+                settings["config"][key] = custom_config[key]
+        except IOError:
+            print("There was a problem loading the supplied configuration file. Aborting...")
+            return
 
     # Normalize directories
-    dicom_dir = os.path.abspath(settings.dicom_dir)
+    dicom_dir = os.path.abspath(cli_args.dicom_dir)
 
-    if settings.bids_dir:
-        bids_dir = os.path.abspath(settings.bids_dir)
+    if cli_args.bids_dir:
+        bids_dir = os.path.join(out_dir, cli_args.bids_dir)
     else:
-        bids_dir = os.path.join(os.getcwd(), "bids_data_{}".format(start_datetime))
-        log.warning("A BIDS output directory was not specified... Will store BIDS results in {}.".format(bids_dir))
+        bids_dir = os.path.join(out_dir, "bids_data_{}".format(start_datetime))
+        log.warning("A BIDS output directory was not specified!!! BIDS dataset will be stored in {}.".format(bids_dir))
 
-    if settings.bids_map:
-        bids_map = os.path.abspath(settings.bids_map)
+    valid_bmap = False
+    if cli_args.bids_map:
+
+        if not os.path.isfile(os.path.abspath(cli_args.bids_map)):
+            log.warning("{} not found. Using {} as DICOM to BIDS map name.".format(cli_args.bids_map,
+                                                                                   os.path.basename(cli_args.bids_map)))
+            map_bname = os.path.basename(cli_args.bids_map)
+
+            if map_bname.endswith(".csv"):
+                bids_map = os.path.join(out_dir, map_bname)
+            else:
+                bids_map = os.path.join(out_dir, "{}.csv".format(map_bname))
+        else:
+            bids_map = os.path.abspath(cli_args.bids_map)
+            valid_bmap = True
+
     else:
-        bids_map = os.path.join(os.getcwd(), "bids_map_{}.csv".format(start_datetime))
+
+        bids_map = os.path.join(out_dir, "bids_map_{}.csv".format(start_datetime))
         log.warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically generate one, and store"
                     " it in {}.".format(bids_map))
 
-    biopac_dir = os.path.abspath(settings.biopac_dir) if settings.biopac_dir else None
+    biopac_dir = os.path.abspath(cli_args.biopac_dir) if cli_args.biopac_dir else None
 
-    heuristics = os.path.abspath(settings.heuristics) if settings.heuristics else None
+    # Assign the rest of the settings to the settings variable
+    settings["bids_map"] = bids_map
+    settings["dicom_dir"] = dicom_dir
+    settings["bids_dir"] = bids_dir
+    settings["nthreads"] = cli_args.nthreads
+    settings["biopac_dir"] = biopac_dir
+    settings["overwrite"] = cli_args.overwrite
+    settings["log"] = log
 
     # Print the settings
-    curr_settings = {
-        "DICOM Directory": dicom_dir,
-        "BIDS Directory": bids_dir,
-        "BIDS map": bids_map,
-        "Overwrite": settings.overwrite,
-        "Log": log_fpath,
-        "Number of threads": settings.nthreads
-        # "DICOM tags file: {}\n".format("default" if not custom_keys else custom_keys) + \
-    }
-
-    log.info(json.dumps(curr_settings, sort_keys=True, indent=2))
+    log.info(json.dumps(settings, sort_keys=True, indent=2))
 
     converter = BIDSConverter(conversion_tool='dcm2niix', log=log)
 
-    if settings.bids_map:
+    if valid_bmap:
 
         # Use provided map to convert files
         log.info(LOG_MESSAGES['start_conversion'])
 
-        converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads,
-                              biopac_dir=biopac_dir)
+        converter.map_to_bids(settings=settings)
 
         log.info(LOG_MESSAGES['shutdown'].format(bids_dir))
 
@@ -140,7 +171,7 @@ def main():
         # Generate Oxygen to BIDS mapping
         log.info(LOG_MESSAGES['start_map'])
 
-        mapping = gen_map(dicom_dir=dicom_dir, heuristics=heuristics, nthreads=settings.nthreads, log=log)
+        mapping = gen_map(settings=settings)
 
         if mapping is not None:
 
@@ -151,8 +182,7 @@ def main():
             # Use generated map to convert files
             log.info(LOG_MESSAGES['start_conversion'])
 
-            converter.map_to_bids(bids_map=bids_map, bids_dir=bids_dir, dicom_dir=dicom_dir, nthreads=settings.nthreads,
-                                  biopac_dir=biopac_dir)
+            converter.map_to_bids(settings=settings)
 
             log.info(LOG_MESSAGES['shutdown'].format(bids_dir))
 

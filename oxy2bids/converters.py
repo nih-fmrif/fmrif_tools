@@ -212,6 +212,9 @@ class BIDSConverter(object):
             actual_fname = os.path.basename(convert_line.split(" ")[-2])
 
             # Move nifti file and json bids file to bids folder
+            print("actual fname: {}".format(actual_fname))
+            print("scan dir: {}".format(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname))))
+            print("bids dir: {}".format(os.path.join(bids_dir, "{}.nii.gz".format(bids_fname))))
             shutil.move(os.path.join(scan_dir, "{}.nii.gz".format(actual_fname)),
                         os.path.join(bids_dir, "{}.nii.gz".format(bids_fname)))
             shutil.move(os.path.join(scan_dir, "{}.json".format(actual_fname)),
@@ -321,7 +324,14 @@ class BIDSConverter(object):
                 "at the moment.".format(self.conversion_tool)
             )
 
-    def map_to_bids(self, bids_map, bids_dir, dicom_dir, nthreads=get_cpu_count(), biopac_dir=None, overwrite=False):
+    def map_to_bids(self, settings):
+
+        bids_map = settings["bids_map"]
+        bids_dir = settings["bids_dir"]
+        dicom_dir = settings["dicom_dir"]
+        nthreads = settings["nthreads"]
+        biopac_dir = settings["biopac_dir"]
+        overwrite = settings["overwrite"]
 
         # Parse bids_map csv table, and create execution list for BIDS generation
         mapping = pd.read_csv(bids_map, header=0, index_col=None)

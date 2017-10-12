@@ -2,30 +2,23 @@ from __future__ import print_function, unicode_literals
 
 import os
 import json
-import pkg_resources
 import pandas as pd
 import argparse
 
 from glob import glob
+from common_utils.config import get_config
 from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime
 from bidsmapper.utils import DicomScan, dicom_parser, get_unique_dicoms_from_compressed
 from bidsmapper.constants import LOG_MESSAGES
 from concurrent.futures import ThreadPoolExecutor, wait
 
 
-def gen_map(dicom_dir, heuristics=None, nthreads=get_cpu_count(), log=None):
+def gen_map(settings):
 
-    log.info("Parsing heuristics file...")
-
-    if heuristics:
-        with open(heuristics) as hfile:
-            heuristics = json.load(hfile)
-    else:
-        def_heuristics = pkg_resources.resource_filename("oxy2bids", "data/bids_keys.json")
-        with open(def_heuristics) as hfile:
-            heuristics = json.load(hfile)
-
-    log.info("Heuristics file parsed!")
+    dicom_dir = settings["dicom_dir"]
+    nthreads = settings["nthreads"]
+    log = settings["log"]
+    heuristics = settings["config"]["BIDS_TAGS"]
 
     exec_list = []
 
@@ -177,85 +170,127 @@ def main():
 
     parser.add_argument(
         "dicom_dir",
-        help="Path to directory containing .tgz files from oxygen",
+        help="Path to directory containing .tgz files from oxygen/gold",
     )
 
     parser.add_argument(
-        "--output",
-        help="Output filename",
+        "out_dir",
+        help="Path to base output directory"
+    )
+
+    parser.add_argument(
+        "--bids_map",
+        help="Name for bids map.",
         default=None
     )
 
     parser.add_argument(
-        "--heuristics",
-        help="Path to a heuristics specification file.",
+        "--biopac_dir",
+        help="Path to directory containing biopac files.",
         default=None
     )
 
+    # TODO: IMPLEMENT THIS
     parser.add_argument(
-        "--dicom_tags",
-        help="Path to a DICOM header tag specification file.",
-        default=None
+        "--overwrite",
+        help="Overwrite existing files in BIDS data folder.",
+        action="store_true",
+        default=False
     )
 
     parser.add_argument(
         "--log",
-        help="Log filepath. Default will be oxy2bids_<timestamp>.log in current working directory.",
+        help="Log filename. Default will be oxy2bids_<timestamp>.log",
         default=None
     )
 
     parser.add_argument(
         "--nthreads",
-        help="number of threads to use when running this script. Use 0 for sequential run.",
+        help="number of threads to use when running this script. Use 1 for sequential run.",
         default=get_cpu_count(),
         type=int
     )
 
     parser.add_argument(
+        "--config",
+        help="Custom config file",
+        default=None
+    )
+
+    # TODO: Refactor some of the log msgs to only show up if this flag is set
+    parser.add_argument(
         "--debug",
-        help="Debug mode. Prints more verbose logs.",
+        help="Output debug statements",
+        action='store_true',
         default=False
     )
 
-    settings = parser.parse_args()
+    cli_args = parser.parse_args()
 
-    if settings.log:
-        log_fpath = os.path.abspath(settings.log)
+    out_dir = os.path.abspath(cli_args.out_dir)
+
+    # Init Logger
+    if cli_args.log:
+        log_fpath = os.path.join(out_dir, cli_args.log)
     else:
-        log_fpath = os.path.join(os.getcwd(), "bidsmapper_{}.log".format(start_datetime))
+        log_fpath = os.path.join(out_dir, "oxy2bids_{}.log".format(start_datetime))
 
-    # Init logger
-    log = init_log(log_fpath, log_name='bidsmapper', debug=settings.debug)
+    log = init_log(log_fpath, log_name='oxy2bids', debug=cli_args.debug)
 
-    dicom_dir = os.path.abspath(settings.dicom_dir)
-
-    output_map = os.path.abspath(settings.output) if settings.output else \
-        os.path.join(os.getcwd(), "bids_map_{}.csv".format(start_datetime))
-
-    heuristics = os.path.abspath(settings.heuristics) if settings.heuristics else None
-
-    # Print the settings
-    curr_settings = {
-        "DICOM directory": dicom_dir,
-        "Output BIDS map": output_map,
-        "Heuristics file": "default" if not heuristics else heuristics,
-        "Log": log_fpath,
-        "Number of threads": settings.nthreads,
-        "Debug Mode": settings.debug
-        # "DICOM tags file: {}\n".format("default" if not custom_keys else custom_keys) +\
+    # Load config file
+    settings = {
+        "config": get_config()
     }
 
-    log.info(json.dumps(curr_settings, sort_keys=True, indent=2))
+    # If there is a custom config file, load it and overwrite any of the config fields
+    # in the default config var
+    if cli_args.config:
+        try:
+            custom_config = json.load(os.path.abspath(cli_args.config))
+            for key in custom_config.keys():
+                settings["config"][key] = custom_config[key]
+        except IOError:
+            print("There was a problem loading the supplied configuration file. Aborting...")
+            return
+
+    # Normalize directories
+    dicom_dir = os.path.abspath(cli_args.dicom_dir)
+
+    if cli_args.bids_dir:
+        bids_dir = os.path.join(out_dir, cli_args.bids_dir)
+    else:
+        bids_dir = os.path.join(out_dir, "bids_data_{}".format(start_datetime))
+        log.warning("A BIDS output directory was not specified!!! BIDS dataset will be stored in {}.".format(bids_dir))
+
+    if cli_args.bids_map:
+        bids_map = os.path.join(out_dir, cli_args.bids_map)
+    else:
+        bids_map = os.path.join(out_dir, "bids_map_{}.csv".format(start_datetime))
+        log.warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically generate one, and store"
+                    " it in {}.".format(bids_map))
+
+    biopac_dir = os.path.abspath(cli_args.biopac_dir) if cli_args.biopac_dir else None
+
+    # Assign the rest of the settings to the settings variable
+    settings["bids_map"] = bids_map
+    settings["dicom_dir"] = dicom_dir
+    settings["bids_dir"] = bids_dir
+    settings["nthreads"] = cli_args.nthreads
+    settings["biopac_dir"] = biopac_dir
+    settings["overwrite"] = cli_args.overwrite
+    settings["log"] = log
+
+    log.info(json.dumps(settings, sort_keys=True, indent=2))
 
     # Generate Oxygen to BIDS mapping
     log.info(LOG_MESSAGES['start_map'])
 
-    mapping = gen_map(dicom_dir=dicom_dir, heuristics=heuristics, nthreads=settings.nthreads, log=log)
+    mapping = gen_map(settings)
 
     if mapping is not None:
 
-        mapping.to_csv(path_or_buf=output_map, index=False, header=True)
-        log.info(LOG_MESSAGES['gen_map_done'].format(output_map))
+        mapping.to_csv(path_or_buf=bids_map, index=False, header=True)
+        log.info(LOG_MESSAGES['gen_map_done'].format(bids_map))
 
     else:
 

@@ -20,8 +20,7 @@ def main():
     )
 
     pkg_data = {
-        'oxy2bids': ['data/bids_keys.json'],
-        'dcmexplorer': ['data/dicom_tags.json']
+        'common_utils': ['data/config.json']
     }
 
     version = __version__
