@@ -278,9 +278,10 @@ def main():
     settings["nthreads"] = cli_args.nthreads
     settings["biopac_dir"] = biopac_dir
     settings["overwrite"] = cli_args.overwrite
-    settings["log"] = log
 
     log.info(json.dumps(settings, sort_keys=True, indent=2))
+
+    settings["log"] = log
 
     # Generate Oxygen to BIDS mapping
     log.info(LOG_MESSAGES['start_map'])

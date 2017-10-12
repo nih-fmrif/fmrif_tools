@@ -150,10 +150,11 @@ def main():
     settings["nthreads"] = cli_args.nthreads
     settings["biopac_dir"] = biopac_dir
     settings["overwrite"] = cli_args.overwrite
-    settings["log"] = log
 
     # Print the settings
     log.info(json.dumps(settings, sort_keys=True, indent=2))
+
+    settings["log"] = log
 
     converter = BIDSConverter(conversion_tool='dcm2niix', log=log)
 
