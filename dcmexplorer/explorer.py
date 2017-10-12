@@ -170,7 +170,8 @@ def main():
     # in the default config var
     if cli_args.config:
         try:
-            custom_config = json.load(os.path.abspath(cli_args.config))
+            with open(os.path.abspath(cli_args.config)) as cust_conf:
+                custom_config = json.load(os.path.abspath(cust_conf))
             for key in custom_config.keys():
                 settings["config"][key] = custom_config[key]
         except IOError:
