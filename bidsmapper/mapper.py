@@ -247,7 +247,7 @@ def main():
     if cli_args.config:
         try:
             with open(os.path.abspath(cli_args.config)) as cust_conf:
-                custom_config = json.load(os.path.abspath(cust_conf))
+                custom_config = json.load(cust_conf)
             for key in custom_config.keys():
                 settings["config"][key] = custom_config[key]
         except IOError:
