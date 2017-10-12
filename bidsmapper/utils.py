@@ -56,7 +56,7 @@ class DicomScan:
         self._compressed = compressed
 
 
-def dicom_parser(scan, heuristics, log=None):
+def dicom_parser(scan, heuristics, dicom_tags, log=None):
 
     dcm_file = scan.get_scan_path()
 
@@ -86,14 +86,45 @@ def dicom_parser(scan, heuristics, log=None):
 
     for heuristic in heuristics.keys():
 
-        tags = heuristics[heuristic]
+        bids_tags = heuristics[heuristic]
 
         # Iterate through the tags for the current bids type, see if they
         # match the current data in the specified dicom field
 
-        for tag in tags:
+        for bids_tag in bids_tags:
+
+            include_tags = bids_tag.get("include", None)
+            exclude_tags = bids_tag.get("exclude", None)
+
+
+
 
             dicom_field = tag['dicom_field']
+
+            for tag in dicom_tags.keys():
+                curr_val = dicom_tags[tag]
+                if type(curr_val) == str:
+                    dcm_group, dcm_element = curr_val.split(",")
+                    dcm_group = int(dcm_group.strip(), 16)
+                    dcm_element = int(dcm_element.strip(), 16)
+                    dcm_dat = curr_dcm.get((dcm_group, dcm_element), None)
+                    metadata[tag] = dcm_dat.value if dcm_dat else ""
+                elif type(curr_val) == list:
+                    metadata[tag] = ""
+                    for val in curr_val:
+                        dcm_group, dcm_element = val.split(",")
+                        dcm_group = int(dcm_group.strip(), 16)
+                        dcm_element = int(dcm_element.strip(), 16)
+                        dcm_dat = curr_dcm.get((dcm_group, dcm_element), None)
+                        if dcm_dat:
+                            metadata[tag] = dcm_dat.value
+                            break
+                else:
+                    log.error("Unknown Dicom tag format: {}".format(curr_val))
+                    raise Exception("Unknown Dicom tag format: {}".format(curr_val))
+
+
+
 
             dcm_dat = ""
             if dicom_field == 'series_description':

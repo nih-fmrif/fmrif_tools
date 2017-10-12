@@ -9,144 +9,167 @@
     "BIDS_TAGS": {
         "anat": [
             {
-                "dicom_field": "series_description",
                 "bids_modality": "T1w",
-                "include": ["T1w"],
+                "include": [
+                    ["series_description", "T1w"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "T2w",
-                "include": ["T2w"],
+                "include": [
+                    ["series_description", "T2w"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "T1map",
-                "include": ["T1map"],
+                "include": [
+                    ["series_description", "T1map"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "T2map",
-                "include": ["T2map"],
+                "include": [
+                    ["series_description", "T2map"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "FLAIR",
-                "include": ["FLAIR"],
+                "include": [
+                    ["series_description", "FLAIR"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "FLASH",
-                "include": ["FLASH"],
+                "include": [
+                    ["series_description", "FLASH"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "PD",
-                "include": ["PD"],
+                "include": [
+                    ["series_description", "PD"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "PDT2",
-                "include": ["PDT2"],
+                "include": [
+                    ["series_description", "PDT2"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "inplaneT1",
-                "include": ["inplaneT1"],
+                "include": [
+                    ["series_description", "inplaneT1"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "inplaneT2",
-                "include": ["inplaneT2"],
+                "include": [
+                    ["series_description", "inplaneT2"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "angio",
-                "include": ["angio"],
+                "include": [
+                    ["series_description", "angio"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "defacemask",
-                "include": ["defacemask"],
+                "include": [
+                    ["series_description", "defacemask"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "SWImageandphase",
-                "include": ["SWImageandphase"],
+                "include": [
+                    ["series_description", "SWImageandphase"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             }
         ],
         "func": [
             {
-                "dicom_field": "series_description",
                 "bids_modality": "bold",
-                "include": ["bold"],
-                "exclude": ["sbref"],
-                "task_regexp": "(?:^|[ _])task-(?P<task>[a-zA-Z]*)(?:[ _]|$)",
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "include": [
+                    ["series_description", "bold"]
+                ],
+                "exclude": [
+                    ["series_description", "sbref"]
+                ],
+                "task": ["series_description", "re::(?:^|[ _])task-(?P<task>[a-zA-Z]*)(?:[ _]|$)"],
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "sbref",
-                "task_regexp": "(?:^|[ _])task-(?P<task>[a-zA-Z]*)(?:[ _]|$)",
-                "include": ["bold", "sbref"],
+                "task": ["series_description", "re::(?:^|[ _])task-(?P<task>[a-zA-Z]*)(?:[ _]|$)"],
+                "include": [
+                    ["series_description", "bold"],
+                    ["series_description", "sbref"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)",
-                "rec_regexp": "(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"],
+                "rec": ["series_description", "re::(?:^|[ _])rec-(?P<rec>[a-zA-Z]*)(?:[_ ]|$)"]
             }
         ],
         "dwi": [
             {
-                "dicom_field": "series_description",
                 "bids_modality": "dwi",
-                "include": ["dwi"],
-                "exclude": ["sbref"],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"
+                "include": [
+                    ["series_description", "dwi"]
+                ],
+                "exclude": [
+                    ["series_description", "sbref"]
+                ],
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"]
             },
             {
-                "dicom_field": "series_description",
                 "bids_modality": "sbref",
-                "include": ["dwi", "sbref"],
+                "include": [
+                    ["series_description", "dwi"],
+                    ["series_description", "sbref"]
+                ],
                 "exclude": [],
-                "acq_regexp": "(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"
+                "acq": ["series_description", "re::(?:^|[ _])acq-(?P<acq>[a-zA-Z]*)(?:[_ ]|$)"]
             }
         ],
         "fmap": [ ]

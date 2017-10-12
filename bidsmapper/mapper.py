@@ -19,6 +19,7 @@ def gen_map(settings):
     nthreads = settings["nthreads"]
     log = settings["log"]
     heuristics = settings["config"]["BIDS_TAGS"]
+    dicom_tags = settings["config"]["DICOM_TAGS"]
 
     exec_list = []
 
