@@ -107,7 +107,7 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
         # Iterate through the tags for the current bids modality, see if they
         # match the current data in the specified dicom field
 
-        for bids_tag in modality.values():
+        for bids_tag in bids_tags[modality].values():
 
             include_tags = bids_tag.get("include", None)
             exclude_tags = bids_tag.get("exclude", None)
