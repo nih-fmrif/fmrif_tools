@@ -112,6 +112,9 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
             include_tags = bids_tag.get("include", None)
             exclude_tags = bids_tag.get("exclude", None)
 
+            print(include_tags)
+            print(exclude_tags)
+
             # Verify that all the keywords in the 'include' fields are present
 
             pass_include = True
@@ -122,6 +125,10 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
                     break
 
                 dicom_field, expr = tag
+
+                print(tag)
+                print(dicom_field)
+                print(expr)
 
                 dicom_dat = get_dicom_dat(dicom_field, curr_dcm, dicom_tags)
 
