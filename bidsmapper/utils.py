@@ -112,9 +112,6 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
             include_tags = bids_tag.get("include", None)
             exclude_tags = bids_tag.get("exclude", None)
 
-            print(include_tags)
-            print(exclude_tags)
-
             # Verify that all the keywords in the 'include' fields are present
 
             pass_include = True
@@ -125,10 +122,6 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
                     break
 
                 dicom_field, expr = tag
-
-                print(tag)
-                print(dicom_field)
-                print(expr)
 
                 dicom_dat = get_dicom_dat(dicom_field, curr_dcm, dicom_tags)
 
@@ -141,7 +134,7 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
                     re_match = re.search(pattern, dicom_dat, re.IGNORECASE)
                     if re_match:
                         continue
-                elif expr.lower() in dicom_dat.lower():
+                elif expr.lower() in str(dicom_dat.value).lower():
                     continue
 
                 pass_include = False
@@ -168,7 +161,7 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
                     if re_match:
                         pass_exclude = False
                         break
-                elif expr.lower() in dicom_dat.lower():
+                elif expr.lower() in str(dicom_dat.value).lower():
                     pass_exclude = False
                     break
 
@@ -182,15 +175,19 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
                 if task_tags:
                     task_field, task_expr = task_tags
                     task_dat = get_dicom_dat(task_field, curr_dcm, dicom_tags)
-                    if task_expr.startswith("re::"):
-                        pattern = r"{}".format(task_expr[4:])
-                        re_match = re.search(pattern, task_dat, re.IGNORECASE)
-                        if re_match:
-                            task = re_match.group(0).strip()
+                    if task_dat:
+                        task_dat = str(task_dat.value)
+                        if task_expr.startswith("re::"):
+                            pattern = r"{}".format(task_expr[4:])
+                            re_match = re.search(pattern, task_dat, re.IGNORECASE)
+                            if re_match:
+                                task = re_match.group(0).strip()
+                            else:
+                                task = "task-NotSpecified"
                         else:
-                            task = "task-NotSpecified"
+                            task = task_expr
                     else:
-                        task = task_expr
+                        task = "task-NotSpecified"
                 else:
                     task = "task-NotSpecified"
 
@@ -199,26 +196,30 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
             if acq_tags:
                 acq_field, acq_expr = acq_tags
                 acq_dat = get_dicom_dat(acq_field, curr_dcm, dicom_tags)
-                if acq_expr.startswith("re::"):
-                    pattern = r"{}".format(acq_expr[4:])
-                    re_match = re.search(pattern, acq_dat, re.IGNORECASE)
-                    if re_match:
-                        acq = re_match.group(0).strip()
-                else:
-                    acq = acq_expr
+                if acq_dat:
+                    acq_dat = str(acq_dat.value)
+                    if acq_expr.startswith("re::"):
+                        pattern = r"{}".format(acq_expr[4:])
+                        re_match = re.search(pattern, acq_dat, re.IGNORECASE)
+                        if re_match:
+                            acq = re_match.group(0).strip()
+                    else:
+                        acq = acq_expr
 
             rec = ""
             rec_tags = bids_tag.get("rec", None)
             if rec_tags:
                 rec_field, rec_expr = rec_tags
                 rec_dat = get_dicom_dat(rec_field, curr_dcm, dicom_tags)
-                if rec_expr.startswith("re::"):
-                    pattern = r"{}".format(rec_expr[4:])
-                    re_match = re.search(pattern, rec_dat, re.IGNORECASE)
-                    if re_match:
-                        rec = re_match.group(0).strip()
-                else:
-                    rec = rec_expr
+                if rec_dat:
+                    rec_dat = str(rec_dat.value)
+                    if rec_expr.startswith("re::"):
+                        pattern = r"{}".format(rec_expr[4:])
+                        re_match = re.search(pattern, rec_dat, re.IGNORECASE)
+                        if re_match:
+                            rec = re_match.group(0).strip()
+                    else:
+                        rec = rec_expr
 
             resp_physio = scan.get_resp()
             cardiac_physio = scan.get_cardio()
