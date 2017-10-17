@@ -56,7 +56,25 @@ class DicomScan:
         self._compressed = compressed
 
 
-def dicom_parser(scan, heuristics, dicom_tags, log=None):
+def get_dicom_dat(field, dcm_file, dicom_tags):
+
+    dcm_fields = [dicom_tags[field]] if not isinstance(dicom_tags[field], list) else dicom_tags[field]
+
+    for dcm_field in dcm_fields:
+
+        dcm_group, dcm_element = dcm_field.split(",")
+        dcm_group = int(dcm_group.strip(), 16)
+        dcm_element = int(dcm_element.strip(), 16)
+
+        dcm_dat = dcm_file.get((dcm_group, dcm_element), None)
+
+        if dcm_dat:
+            return dcm_dat
+
+    return None
+
+
+def dicom_parser(scan, bids_tags, dicom_tags, log=None):
 
     dcm_file = scan.get_scan_path()
 
@@ -84,116 +102,116 @@ def dicom_parser(scan, heuristics, dicom_tags, log=None):
 
         curr_dcm = dicom.read_file(dcm_file, stop_before_pixels=True)
 
-    for heuristic in heuristics.keys():
+    for modality in bids_tags.keys():
 
-        bids_tags = heuristics[heuristic]
-
-        # Iterate through the tags for the current bids type, see if they
+        # Iterate through the tags for the current bids modality, see if they
         # match the current data in the specified dicom field
 
-        for bids_tag in bids_tags:
+        for bids_tag in modality:
 
             include_tags = bids_tag.get("include", None)
             exclude_tags = bids_tag.get("exclude", None)
 
+            # Verify that all the keywords in the 'include' fields are present
 
+            pass_include = True
 
+            for tag in include_tags:
 
-            dicom_field = tag['dicom_field']
-
-            for tag in dicom_tags.keys():
-                curr_val = dicom_tags[tag]
-                if type(curr_val) == str:
-                    dcm_group, dcm_element = curr_val.split(",")
-                    dcm_group = int(dcm_group.strip(), 16)
-                    dcm_element = int(dcm_element.strip(), 16)
-                    dcm_dat = curr_dcm.get((dcm_group, dcm_element), None)
-                    metadata[tag] = dcm_dat.value if dcm_dat else ""
-                elif type(curr_val) == list:
-                    metadata[tag] = ""
-                    for val in curr_val:
-                        dcm_group, dcm_element = val.split(",")
-                        dcm_group = int(dcm_group.strip(), 16)
-                        dcm_element = int(dcm_element.strip(), 16)
-                        dcm_dat = curr_dcm.get((dcm_group, dcm_element), None)
-                        if dcm_dat:
-                            metadata[tag] = dcm_dat.value
-                            break
-                else:
-                    log.error("Unknown Dicom tag format: {}".format(curr_val))
-                    raise Exception("Unknown Dicom tag format: {}".format(curr_val))
-
-
-
-
-            dcm_dat = ""
-            if dicom_field == 'series_description':
-                dcm_dat = curr_dcm.SeriesDescription
-            elif dicom_field == 'sequence_name':
-                if curr_dcm.get((0x19, 0x109c), None):
-                    dcm_dat = curr_dcm[0x19, 0x109c].value
-                elif curr_dcm.get((0x18, 0x24), None):
-                    dcm_dat = curr_dcm[0x18, 0x24].value
-            else:
-                raise Exception('Support for DICOM field {} not implemented.'.format(dicom_field))
-
-            # No data was available for this tag
-            if dcm_dat == "":
-                continue
-
-            # Verify that all the keywords in the include field are present
-            match = True
-            for expr in tag["include"]:
-                pattern = r"(?:^|[ _-]){}(?:[ _-]|$)".format(expr)
-                re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-                if not re_match:
-                    match = False
+                if not pass_include:
                     break
 
-            if not match:
-                continue
+                dicom_field, expr = tag
 
-            # Verify that none of the keywords in the exclude field are present
-            match = False
-            for expr in tag["exclude"]:
-                pattern = r"(?:^|[ _-]){}(?:[ _-]|$)".format(expr)
-                re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-                if re_match:
-                    match = True
+                dicom_dat = get_dicom_dat(dicom_field, curr_dcm, dicom_tags)
+
+                if not dicom_dat:
+                    pass_include = False
                     break
 
-            if match:
+                if expr.startswith("re::"):
+                    pattern = r"{}".format(expr[4:])
+                    re_match = re.search(pattern, dicom_dat, re.IGNORECASE)
+                    if re_match:
+                        continue
+                elif expr.lower() in dicom_dat.lower():
+                    continue
+
+                pass_include = False
+
+            if not pass_include:
+                continue
+
+            # Verify that none of the keywords in the 'exclude' field are present
+
+            pass_exclude = True
+
+            for tag in exclude_tags:
+
+                if not pass_exclude:
+                    break
+
+                dicom_field, expr = tag
+
+                dicom_dat = get_dicom_dat(dicom_field, curr_dcm, dicom_tags)
+
+                if expr.startswith("re::"):
+                    pattern = r"{}".format(expr[4:])
+                    re_match = re.search(pattern, dicom_dat, re.IGNORECASE)
+                    if re_match:
+                        pass_exclude = False
+                        break
+                elif expr.lower() in dicom_dat.lower():
+                    pass_exclude = False
+                    break
+
+            if not pass_exclude:
                 continue
 
             # Verify if there are task, acq, or rec pattern matches
             task = ""
-            if heuristic == "func":
-                task = "task-NoTaskSpecified"
-                if tag.get("task_regexp", None):
-                    pattern = tag["task_regexp"]
-                    re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-                    if re_match:
-                        task = re_match.group(0).strip()
-                elif tag.get("task_name", None):
-                    task = tag["task_name"]
+            if modality == "func":
+                task_tags = bids_tag.get("task", None)
+                if task_tags:
+                    task_field, task_expr = task_tags
+                    task_dat = get_dicom_dat(task_field, curr_dcm, dicom_tags)
+                    if task_expr.startswith("re::"):
+                        pattern = r"{}".format(task_expr[4:])
+                        re_match = re.search(pattern, task_dat, re.IGNORECASE)
+                        if re_match:
+                            task = re_match.group(0).strip()
+                        else:
+                            task = "task-NotSpecified"
+                    else:
+                        task = task_expr
+                else:
+                    task = "task-NotSpecified"
 
             acq = ""
-            if tag.get("acq_regexp", None):
-                pattern = tag["acq_regexp"]
-                re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-                if re_match:
-                    acq = re_match.group(0).strip()
-            elif tag.get("acq", None):
-                acq = tag["aqc"]
+            acq_tags = bids_tag.get("acq", None)
+            if acq_tags:
+                acq_field, acq_expr = acq_tags
+                acq_dat = get_dicom_dat(acq_field, curr_dcm, dicom_tags)
+                if acq_expr.startswith("re::"):
+                    pattern = r"{}".format(acq_expr[4:])
+                    re_match = re.search(pattern, acq_dat, re.IGNORECASE)
+                    if re_match:
+                        acq = re_match.group(0).strip()
+                else:
+                    acq = acq_expr
 
             rec = ""
-            if tag.get("rec_regexp", None):
-                pattern = tag["rec_regexp"]
-                re_match = re.search(pattern, dcm_dat, re.IGNORECASE)
-                if re_match:
-                    rec = re_match.group(0).strip()
-            elif tag.get("rec", None):
-                rec = tag["rec"]
+            rec_tags = bids_tag.get("rec", None)
+            if rec_tags:
+                rec_field, rec_expr = rec_tags
+                rec_dat = get_dicom_dat(rec_field, curr_dcm, dicom_tags)
+                if rec_expr.startswith("re::"):
+                    pattern = r"{}".format(rec_expr[4:])
+                    re_match = re.search(pattern, rec_dat, re.IGNORECASE)
+                    if re_match:
+                        rec = re_match.group(0).strip()
+                else:
+                    rec = rec_expr
 
             resp_physio = scan.get_resp()
             cardiac_physio = scan.get_cardio()
@@ -201,22 +219,23 @@ def dicom_parser(scan, heuristics, dicom_tags, log=None):
             curr_map = OrderedDict({
                 'subject': "",
                 'session': "",
-                'bids_type': heuristic,
+                'bids_type': modality,
                 'task': task,
                 'acq': acq,
                 'rec': rec,
                 'run': "",
-                'modality': tag["bids_modality"],
+                'modality': bids_tag["bids_modality"],
                 'patient_id': curr_dcm.PatientID,
                 'scan_datetime': "{}_{}".format(curr_dcm.StudyDate, curr_dcm.StudyTime),
                 'scan_dir': os.path.dirname(dcm_file),
                 'resp_physio': resp_physio,
-                'cardiac_physio': cardiac_physio
+                'cardiac_physio': cardiac_physio,
+                'biopac': ""  # NOT IMPLEMENTED
             })
 
             if log:
                 log.info("Parsed: {}".format(dcm_file))
-                log.debug("Parsed: {} -- Tag: {} --  Dicom Field: {}".format(dcm_file, tag, dcm_dat))
+                log.debug("Parsed: {} -- Tag: {}".format(dcm_file, bids_tag))
             return curr_map
 
     log.warning("No tag matches for the specified heuristics found in {}.".format(dcm_file))

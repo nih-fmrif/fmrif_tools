@@ -5,8 +5,7 @@ import argparse
 import json
 import pandas as pd
 
-from common_utils.config import get_config
-from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime, validate_dicom_tags
+from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime, validate_dicom_tags, get_config
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor, wait
 from itertools import repeat
@@ -14,17 +13,12 @@ from dcmexplorer.utils import get_sample_dicoms, extract_compressed_dicom_metada
                               extract_uncompressed_dicom_metadata
 
 
-def explore_dicoms(settings):
-
-    dicom_dir = settings["dicom_dir"]
-    dicom_tags = settings["config"]["DICOM_TAGS"]
-    nthreads = settings["nthreads"]
-    log = settings["log"]
+def explore_dicoms(dicom_dir, out_dir, dicom_tags, nthreads, log):
 
     created_log = False
 
     if not log:
-        log = init_log(os.path.join(settings["out_dir"], "dcmexplorer_{}.log".format(get_datetime())),
+        log = init_log(os.path.join(out_dir, "dcmexplorer_{}.log".format(get_datetime())),
                        log_name='dcmexplorer')
         created_log = True
 
@@ -137,70 +131,46 @@ def main():
     )
 
     parser.add_argument(
-        "--log",
-        help="Log filename. Default will be oxy2bids_<timestamp>.log in the directory specified in the out_dir tag.",
-        default=None
-    )
-
-    parser.add_argument(
         "--nthreads",
         help="number of threads to use when running this script. Use 0 for sequential run.",
         default=get_cpu_count(),
         type=int
     )
 
+    settings = {}
+
     cli_args = parser.parse_args()
 
-    out_dir = os.path.abspath(cli_args.out_dir)
+    settings["out_dir"] = os.path.abspath(cli_args.out_dir)
 
     # Init Logger
-    if cli_args.log:
-        log_fpath = os.path.join(out_dir, cli_args.log)
-    else:
-        log_fpath = os.path.join(out_dir, "oxy2bids_{}.log".format(start_datetime))
-
-    log = init_log(log_fpath, 'dcmexplorer')
+    log_fpath = os.path.join(settings["out_dir"], "dcmexplorer_{}.log".format(start_datetime))
+    settings["log"] = init_log(log_fpath, 'dcmexplorer')
 
     # Load config file
-    settings = {
-        "config": get_config()
-    }
-
-    # If there is a custom config file, load it and overwrite any of the config fields
-    # in the default config var
-    if cli_args.config:
-        try:
-            with open(os.path.abspath(cli_args.config)) as cust_conf:
-                custom_config = json.load(cust_conf)
-            for key in custom_config.keys():
-                settings["config"][key] = custom_config[key]
-        except IOError:
-            print("There was a problem loading the supplied configuration file. Aborting...")
-            return
-
-    log.info("Validating Dicom tags...")
-    validate_dicom_tags(settings["config"]["DICOM_TAGS"], log=log)
-    log.info("Successfully parsed Dicom tags!")
+    settings["config"] = get_config(cli_args.config) if cli_args.config else get_config()
 
     # Normalize directories
-    dicom_dir = os.path.abspath(cli_args.dicom_dir)
+    settings["dicom_dir"] = os.path.abspath(cli_args.dicom_dir)
 
-    settings["out_dir"] = out_dir
-    settings["dicom_dir"] = dicom_dir
     settings["nthreads"] = cli_args.nthreads
-    settings["log"] = log
 
-    metadata = explore_dicoms(settings)
+    # Print the settings
+    settings["log"].info(json.dumps({key: settings[key] for key in settings if key != 'log'}, sort_keys=True,
+                                    indent=2))
+
+    metadata = explore_dicoms(settings["dicom_dir"], settings["out_dir"], settings["dicom_tags"],
+                              settings["nthreads"], settings["log"])
 
     if metadata is not None:
         # Export metadata as CSV file
-        output_file = os.path.join(out_dir, "metadata_{}.csv".format(start_datetime))
+        output_file = os.path.join(settings["out_dir"], "metadata_{}.csv".format(start_datetime))
         metadata.to_csv(output_file, sep=',', na_rep='', index=False)
     else:
-        log.warning("No valid Dicom datasets found.")
+        settings["log"].warning("No valid Dicom datasets found.")
 
     # Shutdown the logs
-    log_shutdown(log)
+    log_shutdown(settings["log"])
 
 
 if __name__ == "__main__":

@@ -6,20 +6,13 @@ import pandas as pd
 import argparse
 
 from glob import glob
-from common_utils.config import get_config
-from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime
+from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime, get_config
 from bidsmapper.utils import DicomScan, dicom_parser, get_unique_dicoms_from_compressed
 from bidsmapper.constants import LOG_MESSAGES
 from concurrent.futures import ThreadPoolExecutor, wait
 
 
-def gen_map(settings):
-
-    dicom_dir = settings["dicom_dir"]
-    nthreads = settings["nthreads"]
-    log = settings["log"]
-    heuristics = settings["config"]["BIDS_TAGS"]
-    dicom_tags = settings["config"]["DICOM_TAGS"]
+def gen_map(dicom_dir, bids_tags, dicom_tags, nthreads, log):
 
     exec_list = []
 
@@ -93,7 +86,7 @@ def gen_map(settings):
 
         for scan in exec_list:
 
-            futures.append(executor.submit(dicom_parser, scan, heuristics, log))
+            futures.append(executor.submit(dicom_parser, scan, bids_tags, dicom_tags, log))
 
         wait(futures)
 
@@ -110,23 +103,20 @@ def gen_map(settings):
 
         # Set the BIDS subjects based on unique patient id
         unique_ids = mapping_df['patient_id'].unique()
-        subject_padding = len(str(len(unique_ids))) + 1
         curr_subject = 1
 
         for curr_id in unique_ids:
-            mapping_df.ix[mapping_df['patient_id'] == curr_id, 'subject'] = 'sub-{}'.format(
-                                                                                        str(curr_subject).rjust(
-                                                                                            subject_padding, '0'))
+            mapping_df.ix[mapping_df['patient_id'] == curr_id,
+                          'subject'] = 'sub-{}'.format(str(curr_subject).rjust(5, '0'))
             curr_subject += 1
 
             # Set the BIDS sessions based on datetime stamps of current subject
             unique_datetime = mapping_df[mapping_df['patient_id'] == curr_id]['scan_datetime'].unique()
-            session_padding = len(str(len(unique_datetime))) + 1
             curr_session = 1
 
             for curr_datetime in unique_datetime:
                 mapping_df.ix[(mapping_df['patient_id'] == curr_id) & (mapping_df['scan_datetime'] == curr_datetime),
-                              'session'] = 'ses-{}'.format(str(curr_session).rjust(session_padding, '0'))
+                              'session'] = 'ses-{}'.format(str(curr_session).rjust(5, '0'))
                 curr_session += 1
 
                 # Set the runs based on unique combinations of task/acq/rec/modality fields
@@ -179,31 +169,20 @@ def main():
         help="Path to base output directory"
     )
 
-    parser.add_argument(
-        "--bids_map",
-        help="Name for bids map.",
-        default=None
-    )
-
+    # TODO: AUTOMATIC BIOPAC FILE MATCHING NOT IMPLEMENTED YET
     parser.add_argument(
         "--biopac_dir",
-        help="Path to directory containing biopac files.",
+        help="Path to directory containing biopac files",
         default=None
     )
 
-    # TODO: IMPLEMENT THIS
-    parser.add_argument(
-        "--overwrite",
-        help="Overwrite existing files in BIDS data folder.",
-        action="store_true",
-        default=False
-    )
-
-    parser.add_argument(
-        "--log",
-        help="Log filename. Default will be oxy2bids_<timestamp>.log",
-        default=None
-    )
+    # TODO: FINISH IMPLEMENT THIS
+    # parser.add_argument(
+    #     "--overwrite",
+    #     help="Overwrite existing files in BIDS data folder.",
+    #     action="store_true",
+    #     default=False
+    # )
 
     parser.add_argument(
         "--nthreads",
@@ -226,81 +205,49 @@ def main():
         default=False
     )
 
+    settings = {}
+
     cli_args = parser.parse_args()
 
-    out_dir = os.path.abspath(cli_args.out_dir)
+    settings["out_dir"] = os.path.abspath(cli_args.out_dir)
 
     # Init Logger
-    if cli_args.log:
-        log_fpath = os.path.join(out_dir, cli_args.log)
-    else:
-        log_fpath = os.path.join(out_dir, "oxy2bids_{}.log".format(start_datetime))
-
-    log = init_log(log_fpath, log_name='oxy2bids', debug=cli_args.debug)
+    log_fpath = os.path.join(settings["out_dir"], "oxy2bids_{}.log".format(start_datetime))
+    settings["log"] = init_log(log_fpath, log_name='oxy2bids', debug=cli_args.debug)
 
     # Load config file
-    settings = {
-        "config": get_config()
-    }
-
-    # If there is a custom config file, load it and overwrite any of the config fields
-    # in the default config var
-    if cli_args.config:
-        try:
-            with open(os.path.abspath(cli_args.config)) as cust_conf:
-                custom_config = json.load(cust_conf)
-            for key in custom_config.keys():
-                settings["config"][key] = custom_config[key]
-        except IOError:
-            print("There was a problem loading the supplied configuration file. Aborting...")
-            return
+    settings["config"] = get_config(cli_args.config) if cli_args.config else get_config()
 
     # Normalize directories
-    dicom_dir = os.path.abspath(cli_args.dicom_dir)
+    settings["dicom_dir"] = os.path.abspath(cli_args.dicom_dir)
 
-    if cli_args.bids_dir:
-        bids_dir = os.path.join(out_dir, cli_args.bids_dir)
-    else:
-        bids_dir = os.path.join(out_dir, "bids_data_{}".format(start_datetime))
-        log.warning("A BIDS output directory was not specified!!! BIDS dataset will be stored in {}.".format(bids_dir))
+    settings["bids_map"] = os.path.join(settings["out_dir"], "bids_map_{}.csv".format(start_datetime))
 
-    if cli_args.bids_map:
-        bids_map = os.path.join(out_dir, cli_args.bids_map)
-    else:
-        bids_map = os.path.join(out_dir, "bids_map_{}.csv".format(start_datetime))
-        log.warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically generate one, and store"
-                    " it in {}.".format(bids_map))
+    settings["biopac_dir"] = os.path.abspath(cli_args.biopac_dir) if cli_args.biopac_dir else None
 
-    biopac_dir = os.path.abspath(cli_args.biopac_dir) if cli_args.biopac_dir else None
-
-    # Assign the rest of the settings to the settings variable
-    settings["bids_map"] = bids_map
-    settings["dicom_dir"] = dicom_dir
-    settings["bids_dir"] = bids_dir
     settings["nthreads"] = cli_args.nthreads
-    settings["biopac_dir"] = biopac_dir
-    settings["overwrite"] = cli_args.overwrite
 
-    log.info(json.dumps(settings, sort_keys=True, indent=2))
+    # settings["overwrite"] = cli_args.overwrite  # TODO: IMPLEMENT THIS
 
-    settings["log"] = log
+    settings["log"].info(json.dumps({key: settings[key] for key in settings if key != 'log'}, sort_keys=True,
+                                    indent=2))
 
     # Generate Oxygen to BIDS mapping
-    log.info(LOG_MESSAGES['start_map'])
+    settings["log"].info(LOG_MESSAGES['start_map'])
 
-    mapping = gen_map(settings)
+    mapping = gen_map(settings["dicom_dir"], settings["config"]["BIDS_TAGS"], settings["config"]["DICOM_TAGS"],
+                      settings["nthreads"], settings["log"])
 
     if mapping is not None:
-
-        mapping.to_csv(path_or_buf=bids_map, index=False, header=True)
-        log.info(LOG_MESSAGES['gen_map_done'].format(bids_map))
-
+        col_order = ['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality', 'patient_id',
+                     'scan_datetime', 'scan_dir', 'resp_physio', 'cardiac_physio', 'biopac']
+        mapping.to_csv(path_or_buf=settings["bids_map"], index=False, header=True, columns=col_order)
+        settings["log"].info(LOG_MESSAGES['gen_map_done'].format(settings["bids_map"]))
     else:
-
-        log.warning(LOG_MESSAGES['map_failure'])
+        settings["log"].error(LOG_MESSAGES['map_failure'])
 
     # Shutdown the log
-    log_shutdown(log)
+    log_shutdown(settings["log"])
 
 
 if __name__ == "__main__":

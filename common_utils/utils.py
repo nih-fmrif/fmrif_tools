@@ -4,6 +4,8 @@ import os
 import errno
 import multiprocessing
 import logging
+import json
+import pkg_resources
 
 from datetime import datetime
 
@@ -138,3 +140,24 @@ def validate_dicom_tags(dicom_tags, log=None):
     if not valid:
         err_msg = "Errors were found in the Dicom tags file."
         raise Exception(err_msg)
+
+
+def get_config(custom_config=None):
+
+    config_file = pkg_resources.resource_filename("common_utils", "data/config.json")
+
+    with open(config_file) as cfile:
+        config = json.load(cfile)
+
+    if custom_config:
+        try:
+            with open(os.path.abspath(custom_config)) as cust_conf:
+                user_config = json.load(cust_conf)
+            for key in user_config.keys():
+                config[key] = custom_config[key]
+        except IOError:
+            raise Exception("There was a problem loading the supplied configuration file. Aborting...")
+
+    validate_dicom_tags(config["DICOM_TAGS"])
+
+    return config
