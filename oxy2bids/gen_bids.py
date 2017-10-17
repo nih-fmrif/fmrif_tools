@@ -93,7 +93,11 @@ def main():
     settings["dicom_dir"] = os.path.abspath(cli_args.dicom_dir)
 
     if cli_args.bids_dir:
-        settings["bids_dir"] = os.path.abspath(cli_args.bids_dir)
+        if os.path.isfile(os.path.abspath(cli_args.bids_dir)):
+            settings["bids_dir"] = os.path.abspath(cli_args.bids_dir)
+        else:
+            settings["log"].error("BIDS directory {} not found. Aborting...".format(cli_args.bids_dir))
+            return
     else:
         settings["bids_dir"] = os.path.join(settings["out_dir"], "bids_data_{}".format(start_datetime))
         settings["log"].warning("A BIDS output directory was not specified!!! "
@@ -105,7 +109,7 @@ def main():
             settings["bids_map"] = os.path.abspath(cli_args.bids_map)
             valid_bmap = True
         else:
-            settings["log"].error("BIDS map {} not found. Aborting...".format(cli_args.bids_map))
+            settings["log"].error("DICOM to BIDS map {} not found. Aborting...".format(cli_args.bids_map))
             return
     else:
         settings["bids_map"] = os.path.join(settings["out_dir"], "bids_map_{}.csv".format(start_datetime))

@@ -153,8 +153,9 @@ def get_config(custom_config=None):
         try:
             with open(os.path.abspath(custom_config)) as cust_conf:
                 user_config = json.load(cust_conf)
+
             for key in user_config.keys():
-                config[key] = custom_config[key]
+                config[key] = user_config[key]
         except IOError:
             raise Exception("There was a problem loading the supplied configuration file. Aborting...")
 
