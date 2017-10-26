@@ -1,0 +1,70 @@
+{
+    "DICOM_TAGS": {
+        "study_date": "0x0008,0x0020",
+        "station_name": "0x0008,0x1010",
+        "manufacturer": "0x0008,0x0070",
+        "series_description": "0x0008,0x103e",
+        "sequence_name": ["0x0019,0x109c", "0x0018,0x0024"]
+    },
+    "BIDS_TAGS": {
+        "anat": [
+            {
+                "bids_modality": "T1w",
+                "include": [
+                    ["series_description", "t1"]
+                ],
+                "exclude": [
+                    ["series_description", "t2"]
+                ]
+            },
+            {
+                "bids_modality": "T1w",
+                "include": [
+                    ["series_description", "rage"]
+                ],
+                "exclude": [
+                    ["series_description", "t2"]
+                ]
+            },
+            {
+                "bids_modality": "T2w",
+                "include": [
+                    ["series_description", "t2"]
+                ],
+                "exclude": [
+                    ["series_description", "t1"]
+                ]
+            }
+        ],
+        "func": [
+            {
+                "bids_modality": "bold",
+                "include": [
+                    ["sequence_name", "epiRTnihVR"]
+                ],
+                "exclude": []
+            },
+            {
+                "bids_modality": "bold",
+                "include": [
+                    ["sequence_name", "epiRT"]
+                ],
+                "exclude": []
+            },
+            {
+                "bids_modality": "bold",
+                "include": [
+                    ["sequence_name", "epiRT4MAP"]
+                ],
+                "exclude": []
+            },
+            {
+                "bids_modality": "bold",
+                "include": [
+                    ["sequence_name", "epi_service"]
+                ],
+                "exclude": []
+            }
+        ]
+    }
+}

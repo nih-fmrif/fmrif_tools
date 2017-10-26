@@ -20,7 +20,15 @@ def main():
     )
 
     pkg_data = {
-        'common_utils': ['data/config.json']
+        'common_utils': [
+            'data/bids.json',
+            'data/3Ta.json',
+            'data/3Tb.json',
+            'data/3Tc.json',
+            'data/3Td.json',
+            # 'data/NIAAA3T.json',
+            # 'data/7T.json'
+        ]
     }
 
     version = __version__

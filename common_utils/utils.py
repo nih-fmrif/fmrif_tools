@@ -144,21 +144,51 @@ def validate_dicom_tags(dicom_tags, log=None):
 
 def get_config(custom_config=None):
 
-    config_file = pkg_resources.resource_filename("common_utils", "data/config.json")
+    avail_config = False
 
-    with open(config_file) as cfile:
-        config = json.load(cfile)
+    if custom_config == "3Ta":
+        config_file = pkg_resources.resource_filename("common_utils", "data/3Ta.json")
+        avail_config = True
+    elif custom_config == '3Tb':
+        config_file = pkg_resources.resource_filename("common_utils", "data/3Tb.json")
+        avail_config = True
+    elif custom_config == '3Tc':
+        config_file = pkg_resources.resource_filename("common_utils", "data/3Tc.json")
+        avail_config = True
+    elif custom_config == '3Td':
+        config_file = pkg_resources.resource_filename("common_utils", "data/3Td.json")
+        avail_config = True
+    # elif custom_config == 'NIAAA3T':
+    #     config_file = pkg_resources.resource_filename("common_utils", "data/NIAAA3T.json")
+    #     avail_config = True
+    # elif custom_config == '7T':
+    #     config_file = pkg_resources.resource_filename("common_utils", "data/7T.json")
+    #     avail_config = True
+    else:
+        config_file = pkg_resources.resource_filename("common_utils", "data/bids.json")
 
-    if custom_config:
-        try:
-            with open(os.path.abspath(custom_config)) as cust_conf:
-                user_config = json.load(cust_conf)
+    if avail_config:
 
-            for key in user_config.keys():
-                config[key] = user_config[key]
-        except IOError:
-            raise Exception("There was a problem loading the supplied configuration file. Aborting...")
+        with open(config_file) as cfile:
+            config = json.load(cfile)
 
-    validate_dicom_tags(config["DICOM_TAGS"])
+        return config
 
-    return config
+    else:
+
+        with open(config_file) as cfile:
+            config = json.load(cfile)
+
+        if custom_config:
+            try:
+                with open(os.path.abspath(custom_config)) as cust_conf:
+                    user_config = json.load(cust_conf)
+
+                for key in user_config.keys():
+                    config[key] = user_config[key]
+            except IOError:
+                raise Exception("There was a problem loading the supplied configuration file. Aborting...")
+
+        validate_dicom_tags(config["DICOM_TAGS"])
+
+        return config
