@@ -159,7 +159,7 @@ def main():
     settings["log"].info(json.dumps({key: settings[key] for key in settings if key != 'log'}, sort_keys=True,
                                     indent=2))
 
-    metadata = explore_dicoms(settings["dicom_dir"], settings["out_dir"], settings["dicom_tags"],
+    metadata = explore_dicoms(settings["dicom_dir"], settings["out_dir"], settings["config"]["DICOM_TAGS"],
                               settings["nthreads"], settings["log"])
 
     if metadata is not None:
