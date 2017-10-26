@@ -11,7 +11,7 @@ from collections import OrderedDict
 def get_sample_dicoms(tgz_file, log=None):
 
     try:
-        dicom_files = check_output('tar -tf {} "*.dcm"'.format(tgz_file.strip()),
+        dicom_files = check_output('tar -tf {}'.format(tgz_file.strip()),
                                    universal_newlines=True, shell=True, stderr=STDOUT)
     except CalledProcessError:
         if log:
@@ -22,10 +22,11 @@ def get_sample_dicoms(tgz_file, log=None):
     scans_list = []
 
     for res in str(dicom_files).strip().split("\n"):
-        curr_dir = os.path.dirname(res)
-        if curr_dir not in seen_dirs:
-            scans_list.append(res)
-            seen_dirs.append(curr_dir)
+        if res.endswith(".dcm"):
+            curr_dir = os.path.dirname(res)
+            if curr_dir not in seen_dirs:
+                scans_list.append(res)
+                seen_dirs.append(curr_dir)
 
     return tgz_file, scans_list
 
