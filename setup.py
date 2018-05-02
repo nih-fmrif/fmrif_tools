@@ -52,7 +52,8 @@ def main():
                 'oxy2bids=oxy2bids.gen_bids:main',
                 'process_biopac=biounpacker.biopac_organize:main',
                 'dcmexplorer=dcmexplorer.explorer:main',
-                'bidsmapper=bidsmapper.mapper:main'
+                'bidsmapper=bidsmapper.mapper:main',
+                'mecho_sorter=multiecho.sorter.run_from_cli',
             ]
         },
         packages=find_packages(),
