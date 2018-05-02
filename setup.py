@@ -53,7 +53,7 @@ def main():
                 'process_biopac=biounpacker.biopac_organize:main',
                 'dcmexplorer=dcmexplorer.explorer:main',
                 'bidsmapper=bidsmapper.mapper:main',
-                'mecho_sorter=multiecho.sorter.run_from_cli',
+                'mecho_sorter=multiecho.sorter:run_from_cli',
             ]
         },
         packages=find_packages(),
