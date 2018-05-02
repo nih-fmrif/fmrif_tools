@@ -17,7 +17,7 @@ def reorg_multiechoes(df, out_dir, client):
     # Get the uids of each series in the exam
     unique_series_uids = sorted(df['series_uid'].unique())
 
-    broken_me_series = []
+    invalid_me_series = []
     reorg_files = []
     # Iterate through the different multiecho series
     for curr_series, series_uid in enumerate(unique_series_uids, 1):
@@ -39,10 +39,10 @@ def reorg_multiechoes(df, out_dir, client):
 
         if len(curr_series_df) < expected_num_dicoms:
 
-            broken_me_series.append(series_path)
+            invalid_me_series.append(series_path)
 
             out_dir = out_base / "multiecho_series_{}_incomplete".format(
-                str(curr_series).rjust(2, '0'), str(len(broken_me_series)).rjust(2, '0'))
+                str(curr_series).rjust(2, '0'), str(len(invalid_me_series)).rjust(2, '0'))
 
             files = [s.path for s in curr_series_df.itertuples()]
 
@@ -79,6 +79,8 @@ def reorg_multiechoes(df, out_dir, client):
 
     _ = wait(reorg_files)
 
+    return invalid_me_series
+
 
 def run_sorter(work_dir, out_dir, n_workers=None, dir_type='series'):
 
@@ -102,10 +104,16 @@ def run_sorter(work_dir, out_dir, n_workers=None, dir_type='series'):
 
     df = df.compute()
 
-    reorg_multiechoes(df=df, out_dir=str(out_dir), client=client)
+    invalid_me_series = reorg_multiechoes(df=df, out_dir=str(out_dir), client=client)
 
     client.close()
     cluster.close()
+
+    for invalid_me in invalid_me_series:
+        if invalid_me in me_series:
+            me_series.remove(invalid_me)
+
+    return me_series, invalid_me_series, non_me_series
 
 
 def run_from_cli():
@@ -142,7 +150,12 @@ def run_from_cli():
     n_workers = int(cli_args['n_workers'])
     dir_type = cli_args['dir_type']
 
-    run_sorter(work_dir=work_dir, out_dir=out_dir, n_workers=n_workers, dir_type=dir_type)
+    me_series, invalid_me_series, non_me_series = run_sorter(work_dir=work_dir, out_dir=out_dir,
+                                                             n_workers=n_workers, dir_type=dir_type)
+
+    print("Number of multiecho series converted: {}".format(len(me_series)))
+    print("Number of invalid multiecho series: {}".format(len(invalid_me_series)))
+    print("Number of non-multiecho series: {}".format(len(non_me_series)))
 
 
 if __name__ == "__main__":
