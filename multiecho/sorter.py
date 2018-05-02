@@ -145,10 +145,10 @@ def run_from_cli():
 
     cli_args = parser.parse_args()
 
-    work_dir = Path(cli_args['work_dir']).absolute()
-    out_dir = Path(cli_args['out_dir']).absolute()
-    n_workers = int(cli_args['n_workers'])
-    dir_type = cli_args['dir_type']
+    work_dir = Path(cli_args.work_dir).absolute()
+    out_dir = Path(cli_args.out_dir).absolute()
+    n_workers = int(cli_args.n_workers)
+    dir_type = cli_args.dir_type
 
     me_series, invalid_me_series, non_me_series = run_sorter(work_dir=work_dir, out_dir=out_dir,
                                                              n_workers=n_workers, dir_type=dir_type)
