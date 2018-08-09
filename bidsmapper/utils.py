@@ -96,15 +96,11 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
 
         oxy_fobj = io.BytesIO(oxy_bytes)
 
-        print(oxy_fobj)
-
         curr_dcm = pydicom.dcmread(oxy_fobj, stop_before_pixels=True)
 
     else:
 
         curr_dcm = pydicom.dcmread(dcm_file, stop_before_pixels=True)
-
-    print(curr_dcm)
 
     for modality in bids_tags.keys():
 
