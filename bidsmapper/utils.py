@@ -3,7 +3,7 @@ from __future__ import print_function, unicode_literals
 import os
 import re
 import io
-import dicom
+import pydicom
 
 from collections import OrderedDict
 from subprocess import CalledProcessError, check_output, STDOUT
@@ -98,11 +98,11 @@ def dicom_parser(scan, bids_tags, dicom_tags, log=None):
 
         print(oxy_fobj)
 
-        curr_dcm = dicom.read_file(oxy_fobj, stop_before_pixels=True)
+        curr_dcm = pydicom.dcmread(oxy_fobj, stop_before_pixels=True)
 
     else:
 
-        curr_dcm = dicom.read_file(dcm_file, stop_before_pixels=True)
+        curr_dcm = pydicom.dcmread(dcm_file, stop_before_pixels=True)
 
     print(curr_dcm)
 
