@@ -42,7 +42,7 @@ CLASSIFIERS = [
 REQUIRES = [
     'matplotlib >= 2.0.2',
     'pandas >= 0.20.3',
-    'pydicom == 0.9.9',
+    'pydicom >= 1.1.0',
     'numpy >= 1.13.1',
     'bioread >= 1.0.4',
 ]
