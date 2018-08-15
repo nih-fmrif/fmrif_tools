@@ -365,6 +365,7 @@ class BIDSConverter(object):
         resp_physio = row['resp_physio']
         cardiac_physio = row['cardiac_physio']
         biopac = row.get('biopac', None)
+        echo = row.get('echo', None)
 
         bids_name = subject
 
@@ -396,6 +397,9 @@ class BIDSConverter(object):
 
             if run:
                 bids_name += '_{}'.format(run)
+
+            if echo:
+                bids_name += '_{}'.format(echo)
 
             bids_name += '_{}'.format(modality)
 
