@@ -82,9 +82,10 @@ def main():
     settings["debug"] = cli_args.debug
 
     settings["out_dir"] = Path(cli_args.out_dir)
-
+    print(settings['out_dir'])
     # Init log
     log_fpath = Path(settings["out_dir"]) / "oxy2bids_{}.log".format(start_datetime)
+    print(log_fpath)
     settings["log"] = init_log(log_fpath, log_name='oxy2bids', debug=settings["debug"])
 
     # Load config file
