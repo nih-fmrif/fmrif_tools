@@ -89,7 +89,7 @@ def main():
     settings["log"] = init_log(log_fpath, log_name='oxy2bids', debug=settings["debug"])
 
     # Load config file
-    settings["config"] = get_config(cli_args.config)
+    settings["config"] = get_config(cli_args.config, log=settings['log'])
 
     # Normalize directories
     settings["dicom_dir"] = Path(cli_args.dicom_dir).absolute()

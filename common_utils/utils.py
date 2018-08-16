@@ -46,7 +46,6 @@ def init_log(log_fpath=None, log_name=None, debug=False):
 
     if log_fpath:
         # Log handler for file
-        print(log_fpath)
         file_handler = logging.FileHandler(str(log_fpath))
         if debug:
             file_handler.setLevel(logging.DEBUG)
@@ -148,7 +147,7 @@ def validate_dicom_tags(dicom_tags, log=None):
         raise Exception(err_msg)
 
 
-def get_config(custom_config=None):
+def get_config(custom_config=None, log=None):
 
     if custom_config and (custom_config not in ['3Ta', '3Tb', '3Tc', '3Td', 'BIDS']):
         # There is a user supplied config file that is not a default option, load it
@@ -161,7 +160,7 @@ def get_config(custom_config=None):
         except IOError:
             raise Exception("There was a problem loading the supplied configuration file. Aborting...")
 
-        validate_dicom_tags(config["DICOM_TAGS"])
+        validate_dicom_tags(dicom_tags=config["DICOM_TAGS"], log=log)
 
         return config
 
