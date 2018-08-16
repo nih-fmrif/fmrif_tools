@@ -81,22 +81,22 @@ def main():
 
     settings["debug"] = cli_args.debug
 
-    settings["out_dir"] = Path(cli_args.out_dir)
-    print(settings['out_dir'])
+    settings["out_dir"] = Path(cli_args.out_dir).absolute()
+
     # Init log
     log_fpath = Path(settings["out_dir"]) / "oxy2bids_{}.log".format(start_datetime)
-    print(log_fpath)
+
     settings["log"] = init_log(log_fpath, log_name='oxy2bids', debug=settings["debug"])
 
     # Load config file
     settings["config"] = get_config(cli_args.config)
 
     # Normalize directories
-    settings["dicom_dir"] = Path(cli_args.dicom_dir)
+    settings["dicom_dir"] = Path(cli_args.dicom_dir).absolute()
 
     if cli_args.bids_dir:
 
-        settings['bids_dir'] = Path(cli_args.bids_dir)
+        settings['bids_dir'] = Path(cli_args.bids_dir).absolute()
 
         if not settings['bids_dir'].is_dir():
             settings['log'].error("BIDS directory {} not found. Aborting...".format(cli_args.bids_dir))
@@ -112,7 +112,7 @@ def main():
 
     if cli_args.bids_map:
 
-        settings['bids_map'] = Path(cli_args.bids_map)
+        settings['bids_map'] = Path(cli_args.bids_map).absolute()
 
         if settings['bids_map'].is_file():
             valid_bmap = True
@@ -126,7 +126,7 @@ def main():
         settings["log"].warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically "
                                 "generate one, and store it in {}.".format(settings["bids_map"]))
 
-    settings["biopac_dir"] = Path(cli_args.biopac_dir) if cli_args.biopac_dir else None
+    settings["biopac_dir"] = Path(cli_args.biopac_dir).absolute() if cli_args.biopac_dir else None
 
     settings["nthreads"] = cli_args.nthreads
 

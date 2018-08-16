@@ -436,7 +436,10 @@ class BIDSConverter(object):
         # Based on the above information, compute the execution params
         exec_params = OrderedDict({
             'conversion_tool': conversion_tool,
-            'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir, subject, session, row['bids_type'],
+            'bids_fpath': os.path.join("{}/{}/{}/{}/{}.nii.gz".format(bids_dir,
+                                                                      subject,
+                                                                      session,
+                                                                      row['bids_type'],
                                                                       bids_name)),
             'dicom_dir': dicom_dir,
             'scan_dir': scan_dir,

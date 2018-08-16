@@ -152,6 +152,8 @@ def get_config(custom_config=None):
     if custom_config and (custom_config not in ['3Ta', '3Tb', '3Tc', '3Td', 'BIDS']):
         # There is a user supplied config file that is not a default option, load it
 
+        custom_config = Path(custom_config).absolute()
+
         try:
             with open(str(custom_config)) as cfile:
                 config = json.load(cfile)
@@ -175,7 +177,7 @@ def get_config(custom_config=None):
 
         config_file = pkg_resources.resource_filename("common_utils", "data/{}".format(fmap[custom_config]))
 
-        with open(str(config_file)) as cfile:
+        with open(config_file) as cfile:
             config = json.load(cfile)
 
         return config
@@ -185,7 +187,7 @@ def get_config(custom_config=None):
 
         config_file = pkg_resources.resource_filename("common_utils", "data/bids.json")
 
-        with open(str(config_file)) as cfile:
+        with open(config_file) as cfile:
             config = json.load(cfile)
 
         return config
