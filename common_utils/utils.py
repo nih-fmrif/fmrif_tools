@@ -8,6 +8,7 @@ import json
 import pkg_resources
 
 from datetime import datetime
+from pathlib import Path
 
 
 def get_datetime():
@@ -45,7 +46,7 @@ def init_log(log_fpath=None, log_name=None, debug=False):
 
     if log_fpath:
         # Log handler for file
-        file_handler = logging.FileHandler(log_fpath)
+        file_handler = logging.FileHandler(str(log_fpath))
         if debug:
             file_handler.setLevel(logging.DEBUG)
         else:
