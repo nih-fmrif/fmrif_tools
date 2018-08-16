@@ -4,6 +4,7 @@ import os
 import argparse
 import json
 
+from pathlib import Path
 from oxy2bids.constants import LOG_MESSAGES
 from common_utils.utils import init_log, log_shutdown, get_cpu_count, get_datetime, get_config
 from oxy2bids.converters import BIDSConverter
@@ -80,43 +81,51 @@ def main():
 
     settings["debug"] = cli_args.debug
 
-    settings["out_dir"] = os.path.abspath(cli_args.out_dir)
+    settings["out_dir"] = Path(cli_args.out_dir)
 
     # Init log
-    log_fpath = os.path.join(settings["out_dir"], "oxy2bids_{}.log".format(start_datetime))
+    log_fpath = Path(settings["out_dir"]) / "oxy2bids_{}.log".format(start_datetime)
     settings["log"] = init_log(log_fpath, log_name='oxy2bids', debug=settings["debug"])
 
     # Load config file
-    settings["config"] = get_config(cli_args.config) if cli_args.config else get_config()
+    settings["config"] = get_config(cli_args.config)
 
     # Normalize directories
-    settings["dicom_dir"] = os.path.abspath(cli_args.dicom_dir)
+    settings["dicom_dir"] = Path(cli_args.dicom_dir)
 
     if cli_args.bids_dir:
-        if os.path.isfile(os.path.abspath(cli_args.bids_dir)):
-            settings["bids_dir"] = os.path.abspath(cli_args.bids_dir)
-        else:
-            settings["log"].error("BIDS directory {} not found. Aborting...".format(cli_args.bids_dir))
-            return
+
+        settings['bids_dir'] = Path(cli_args.bids_dir)
+
+        if not settings['bids_dir'].is_dir():
+            settings['log'].error("BIDS directory {} not found. Aborting...".format(cli_args.bids_dir))
+
     else:
-        settings["bids_dir"] = os.path.join(settings["out_dir"], "bids_data_{}".format(start_datetime))
+
+        settings["bids_dir"] = settings["out_dir"] / "bids_data_{}".format(start_datetime)
+
         settings["log"].warning("A BIDS output directory was not specified!!! "
                                 "BIDS dataset will be stored in {}.".format(settings["bids_dir"]))
 
     valid_bmap = False
+
     if cli_args.bids_map:
-        if os.path.isfile(os.path.abspath(cli_args.bids_map)):
-            settings["bids_map"] = os.path.abspath(cli_args.bids_map)
+
+        settings['bids_map'] = Path(cli_args.bids_map)
+
+        if settings['bids_map'].is_file():
             valid_bmap = True
         else:
             settings["log"].error("DICOM to BIDS map {} not found. Aborting...".format(cli_args.bids_map))
             return
     else:
-        settings["bids_map"] = os.path.join(settings["out_dir"], "bids_map_{}.csv".format(start_datetime))
+
+        settings["bids_map"] = settings["out_dir"] / "bids_map_{}.csv".format(start_datetime)
+
         settings["log"].warning("A DICOM to BIDS mapping was not provided... Will attempt to automatically "
                                 "generate one, and store it in {}.".format(settings["bids_map"]))
 
-    settings["biopac_dir"] = os.path.abspath(cli_args.biopac_dir) if cli_args.biopac_dir else None
+    settings["biopac_dir"] = Path(cli_args.biopac_dir) if cli_args.biopac_dir else None
 
     settings["nthreads"] = cli_args.nthreads
 
@@ -133,8 +142,14 @@ def main():
         # Use provided map to convert files
         settings["log"].info(LOG_MESSAGES['start_conversion'])
 
-        converter.map_to_bids(settings["bids_map"], settings["bids_dir"], settings["dicom_dir"],
-                              settings["biopac_dir"], settings["nthreads"], settings["overwrite"])
+        converter.map_to_bids(
+            bids_map=str(settings["bids_map"]),
+            bids_dir=str(settings["bids_dir"]),
+            dicom_dir=str(settings["dicom_dir"]),
+            biopac_dir=str(settings["biopac_dir"]),
+            nthreads=settings["nthreads"],
+            overwrite=settings["overwrite"]
+        )
 
         settings["log"].info(LOG_MESSAGES['shutdown'].format(settings["bids_dir"]))
 
@@ -143,8 +158,13 @@ def main():
         # Generate Oxygen to BIDS mapping
         settings["log"].info(LOG_MESSAGES['start_map'])
 
-        mapping = gen_map(settings["dicom_dir"], settings["config"]["BIDS_TAGS"], settings["config"]["DICOM_TAGS"],
-                          settings["nthreads"], settings["log"])
+        mapping = gen_map(
+            dicom_dir=str(settings["dicom_dir"]),
+            bids_tags=settings["config"]["BIDS_TAGS"],
+            dicom_tags=settings["config"]["DICOM_TAGS"],
+            nthreads=settings["nthreads"],
+            log=settings["log"]
+        )
 
         if mapping is not None:
 
@@ -152,14 +172,25 @@ def main():
                          'scan_datetime', 'scan_dir', 'resp_physio', 'cardiac_physio', 'biopac']
 
             # Save map to csv
-            mapping.to_csv(path_or_buf=settings["bids_map"], index=False, header=True, columns=col_order)
+            mapping.to_csv(
+                path_or_buf=str(settings["bids_map"]),
+                index=False,
+                header=True,
+                columns=col_order
+            )
             settings["log"].info(LOG_MESSAGES['gen_map_done'].format(settings["bids_map"]))
 
             # Use generated map to convert files
             settings["log"].info(LOG_MESSAGES['start_conversion'])
 
-            converter.map_to_bids(settings["bids_map"], settings["bids_dir"], settings["dicom_dir"],
-                                  settings["biopac_dir"], settings["nthreads"], settings["overwrite"])
+            converter.map_to_bids(
+                bids_map=str(settings["bids_map"]),
+                bids_dir=str(settings["bids_dir"]),
+                dicom_dir=str(settings["dicom_dir"]),
+                biopac_dir=str(settings["biopac_dir"]),
+                nthreads=settings["nthreads"],
+                overwrite=settings["overwrite"]
+            )
 
             settings["log"].info(LOG_MESSAGES['shutdown'].format(settings["bids_dir"]))
 

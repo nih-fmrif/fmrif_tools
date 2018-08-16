@@ -130,7 +130,7 @@ def validate_dicom_tags(dicom_tags, log=None):
             for pair in curr_val:
 
                 if type(pair) != str:
-                    err_msg = "The vale {} in the tag {} is not a valid hexadecimal number pair".format(pair, tag)
+                    err_msg = "The value {} in the tag {} is not a valid hexadecimal number pair".format(pair, tag)
                     log.error(err_msg) if log else print(err_msg)
                     valid = False
                 else:
@@ -144,51 +144,43 @@ def validate_dicom_tags(dicom_tags, log=None):
 
 def get_config(custom_config=None):
 
-    avail_config = False
+    if custom_config and (custom_config not in ['3Ta', '3Tb', '3Tc', '3Td', 'BIDS']):
+        # There is a user supplied config file that is not a default option, load it
 
-    if custom_config == "3Ta":
-        config_file = pkg_resources.resource_filename("common_utils", "data/3Ta.json")
-        avail_config = True
-    elif custom_config == '3Tb':
-        config_file = pkg_resources.resource_filename("common_utils", "data/3Tb.json")
-        avail_config = True
-    elif custom_config == '3Tc':
-        config_file = pkg_resources.resource_filename("common_utils", "data/3Tc.json")
-        avail_config = True
-    elif custom_config == '3Td':
-        config_file = pkg_resources.resource_filename("common_utils", "data/3Td.json")
-        avail_config = True
-    # elif custom_config == 'NIAAA3T':
-    #     config_file = pkg_resources.resource_filename("common_utils", "data/NIAAA3T.json")
-    #     avail_config = True
-    # elif custom_config == '7T':
-    #     config_file = pkg_resources.resource_filename("common_utils", "data/7T.json")
-    #     avail_config = True
-    else:
-        config_file = pkg_resources.resource_filename("common_utils", "data/bids.json")
+        try:
+            with open(str(custom_config)) as cfile:
+                config = json.load(cfile)
+        except IOError:
+            raise Exception("There was a problem loading the supplied configuration file. Aborting...")
 
-    if avail_config:
+        validate_dicom_tags(config["DICOM_TAGS"])
 
-        with open(config_file) as cfile:
+        return config
+
+    elif custom_config and (custom_config in ['3Ta', '3Tb', '3Tc', '3Td', 'BIDS']):
+        # Specifies one of the default config files
+
+        fmap = {
+            '3Ta': '3Ta.json',
+            '3Tb': '3Tb.json',
+            '3Tc': '3Tc.json',
+            '3Td': '3Td.json',
+            'BIDS': 'bids.json',
+        }
+
+        config_file = pkg_resources.resource_filename("common_utils", "data/{}".format(fmap[custom_config]))
+
+        with open(str(config_file)) as cfile:
             config = json.load(cfile)
 
         return config
 
     else:
+        # No config file specified, used BIDS map
 
-        with open(config_file) as cfile:
+        config_file = pkg_resources.resource_filename("common_utils", "data/bids.json")
+
+        with open(str(config_file)) as cfile:
             config = json.load(cfile)
-
-        if custom_config:
-            try:
-                with open(os.path.abspath(custom_config)) as cust_conf:
-                    user_config = json.load(cust_conf)
-
-                for key in user_config.keys():
-                    config[key] = user_config[key]
-            except IOError:
-                raise Exception("There was a problem loading the supplied configuration file. Aborting...")
-
-        validate_dicom_tags(config["DICOM_TAGS"])
 
         return config
