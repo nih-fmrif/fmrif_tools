@@ -107,7 +107,7 @@ def gen_map(dicom_dir, bids_tags, dicom_tags, nthreads, log):
 
         for curr_id in unique_ids:
             mapping_df.ix[mapping_df['patient_id'] == curr_id,
-                          'subject'] = 'sub-{}'.format(str(curr_subject).rjust(5, '0'))
+                          'subject'] = 'sub-{}'.format(str(curr_subject).rjust(5, str('0')))
             curr_subject += 1
 
             # Set the BIDS sessions based on datetime stamps of current subject
@@ -116,7 +116,7 @@ def gen_map(dicom_dir, bids_tags, dicom_tags, nthreads, log):
 
             for curr_datetime in unique_datetime:
                 mapping_df.ix[(mapping_df['patient_id'] == curr_id) & (mapping_df['scan_datetime'] == curr_datetime),
-                              'session'] = 'ses-{}'.format(str(curr_session).rjust(5, '0'))
+                              'session'] = 'ses-{}'.format(str(curr_session).rjust(5, str('0')))
                 curr_session += 1
 
                 # Set the runs based on unique combinations of task/acq/rec/modality fields
@@ -145,7 +145,7 @@ def gen_map(dicom_dir, bids_tags, dicom_tags, nthreads, log):
                            row['task'] == params['task'] and row['acq'] == params['acq'] and \
                            row['rec'] == params['rec'] and row['modality'] == params['modality']:
 
-                            row['run'] = "run-{}".format(str(curr_run).rjust(run_padding, '0'))
+                            row['run'] = "run-{}".format(str(curr_run).rjust(run_padding, str('0')))
                             curr_run += 1
         mapping_df.sort_values(['subject', 'session', 'task', 'modality', 'run'],
                                ascending=['True', 'True', 'True', 'True', 'True'], inplace=True)
