@@ -235,13 +235,23 @@ def main():
     # Generate Oxygen to BIDS mapping
     settings["log"].info(LOG_MESSAGES['start_map'])
 
-    mapping = gen_map(settings["dicom_dir"], settings["config"]["BIDS_TAGS"], settings["config"]["DICOM_TAGS"],
-                      settings["nthreads"], settings["log"])
+    mapping = gen_map(
+        dicom_dir=str(settings["dicom_dir"]),
+        bids_tags=settings["config"]["BIDS_TAGS"],
+        dicom_tags=settings["config"]["DICOM_TAGS"],
+        nthreads=settings["nthreads"],
+        log=settings["log"]
+    )
 
     if mapping is not None:
         col_order = ['subject', 'session', 'bids_type', 'task', 'acq', 'rec', 'run', 'modality', 'patient_id',
                      'scan_datetime', 'scan_dir', 'resp_physio', 'cardiac_physio', 'biopac']
-        mapping.to_csv(path_or_buf=settings["bids_map"], index=False, header=True, columns=col_order)
+        mapping.to_csv(
+            path_or_buf=str(settings["bids_map"]),
+            index=False,
+            header=True,
+            columns=col_order
+        )
         settings["log"].info(LOG_MESSAGES['gen_map_done'].format(settings["bids_map"]))
     else:
         settings["log"].error(LOG_MESSAGES['map_failure'])
