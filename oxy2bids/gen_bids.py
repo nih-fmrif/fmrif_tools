@@ -133,7 +133,7 @@ def main():
     settings["overwrite"] = cli_args.overwrite
 
     # Print the settings
-    settings["log"].info(json.dumps({key: settings[key] for key in settings if key != 'log'}, sort_keys=True,
+    settings["log"].info(json.dumps({key: str(settings[key]) for key in settings if key != 'log'}, sort_keys=True,
                                     indent=2))
 
     converter = BIDSConverter(conversion_tool='dcm2niix', log=settings["log"])
