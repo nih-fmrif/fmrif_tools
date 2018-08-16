@@ -81,6 +81,8 @@ def main():
 
     settings["debug"] = cli_args.debug
 
+    print(Path(cli_args.out_dir))
+
     settings["out_dir"] = Path(cli_args.out_dir).absolute()
 
     # Init log
