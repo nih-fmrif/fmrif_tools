@@ -128,13 +128,9 @@ def validate_dicom_tags(dicom_tags, log=None):
 
         elif type(curr_val) == list:
 
-            log.debug("here {}".format(type(curr_val)))
-
             for pair in curr_val:
 
-                log.debug("here 2 {}".format(type(pair)))
-
-                if type(pair) != str:
+                if isinstance(pair, ("".__class__, u"".__class__)):
                     err_msg = "The value {} in the tag {} is not a valid hexadecimal number pair".format(pair, tag)
                     log.error(err_msg) if log else print(err_msg)
                     valid = False
