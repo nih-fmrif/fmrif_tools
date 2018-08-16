@@ -127,7 +127,11 @@ def validate_dicom_tags(dicom_tags, log=None):
 
         elif type(curr_val) == list:
 
+            print("here {}".format(type(curr_val)))
+
             for pair in curr_val:
+
+                print("here 2 {}".format(type(pair)))
 
                 if type(pair) != str:
                     err_msg = "The value {} in the tag {} is not a valid hexadecimal number pair".format(pair, tag)
