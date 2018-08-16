@@ -46,6 +46,7 @@ def init_log(log_fpath=None, log_name=None, debug=False):
 
     if log_fpath:
         # Log handler for file
+        print(log_fpath)
         file_handler = logging.FileHandler(str(log_fpath))
         if debug:
             file_handler.setLevel(logging.DEBUG)
