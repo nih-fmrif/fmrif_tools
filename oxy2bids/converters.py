@@ -1,3 +1,5 @@
+# -- coding: utf-8 --
+
 from __future__ import print_function, unicode_literals
 
 import os
@@ -286,8 +288,8 @@ class BIDSConverter(object):
 
                 bids_fname = bids_fname[:-5] if bids_fname.endswith('_bold') else bids_fname
 
-                physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t", index=False,
-                                 header=False, compression="gzip")
+                physio_df.to_csv(os.path.join(bids_dir, "{}_physio.tsv.gz".format(bids_fname)), sep="\t",
+                                 index=False, header=False, compression="gzip")
 
                 with open(os.path.join(bids_dir, "{}_physio.json".format(bids_fname)), 'w') as physio_json:
                     json.dump(physio_meta, physio_json)
