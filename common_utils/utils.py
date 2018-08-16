@@ -130,6 +130,10 @@ def validate_dicom_tags(dicom_tags, log=None):
 
             for pair in curr_val:
 
+                print(pair)
+                print(type(pair))
+                print(isinstance(pair, ("".__class__, u"".__class__)))
+
                 if isinstance(pair, ("".__class__, u"".__class__)):
                     err_msg = "The value {} in the tag {} is not a valid hexadecimal number pair".format(pair, tag)
                     log.error(err_msg) if log else print(err_msg)
